@@ -473,9 +473,18 @@ static GsmResult_t quectel_http_download_to_flash(
     uint16_t port;
     const char *path;
     bool ssl;
+    static char redir_url[192];  /* for redirect following */
+    const char *cur_url = url;
+    uint8_t redirects = 0;
     *out_written = 0;
 
-    if (!q_parse_url(url, host, sizeof(host), &port, &path, &ssl)) {
+redirect_retry:
+    if (redirects > 3) {
+        Debug_Print("[QEC] Too many redirects\r\n");
+        return GSM_ERR_HTTP_FAIL;
+    }
+
+    if (!q_parse_url(cur_url, host, sizeof(host), &port, &path, &ssl)) {
         Debug_Print("[QEC] Bad URL\r\n");
         return GSM_ERR_HTTP_FAIL;
     }
@@ -577,11 +586,35 @@ static GsmResult_t quectel_http_download_to_flash(
                         content_length = (uint32_t)atol(cl + 15);
                         got_length = true;
                     }
-                    /* Check HTTP status */
-                    char *sp = strchr(hdr_buf, ' ');
-                    int status = sp ? atoi(sp + 1) : 0;
+                    /* Check HTTP status — find "HTTP/" to skip any URC prefix */
+                    int status = 0;
+                    char *http = strstr(hdr_buf, "HTTP/");
+                    if (http) {
+                        char *sp = strchr(http, ' ');
+                        if (sp) status = atoi(sp + 1);
+                    }
                     Debug_Printf("[QEC] HTTP %d, len=%lu\r\n", status, content_length);
-                    if (status != 200) {
+
+                    /* Handle redirects (301/302) — follow them */
+                    if (status == 301 || status == 302) {
+                        char *loc = strstr(hdr_buf, "Location:");
+                        if (!loc) loc = strstr(hdr_buf, "location:");
+                        if (loc) {
+                            loc += 9; while (*loc == ' ') loc++;
+                            char *end = strstr(loc, "\r\n");
+                            if (end) *end = '\0';
+                            Debug_Printf("[QEC] Redirect→ %s\r\n", loc);
+                            strncpy(redir_url, loc, sizeof(redir_url)-1);
+                            redir_url[sizeof(redir_url)-1] = '\0';
+                            AT_Cmd(ssl?"AT+QSSLCLOSE=0":"AT+QICLOSE=0","OK",5000U);
+                            cur_url = redir_url;
+                            redirects++;
+                            goto redirect_retry;
+                        }
+                        AT_Cmd(ssl?"AT+QSSLCLOSE=0":"AT+QICLOSE=0","OK",5000U);
+                        return GSM_ERR_HTTP_FAIL;
+                    }
+                    if (status != 200 && status != 206) {
                         Debug_Printf("[QEC] Bad status: %d\r\n", status);
                         AT_Cmd(ssl ? "AT+QSSLCLOSE=0" : "AT+QICLOSE=0", "OK", 5000U);
                         return GSM_ERR_HTTP_FAIL;
