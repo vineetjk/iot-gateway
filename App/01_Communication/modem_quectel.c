@@ -626,7 +626,7 @@ redirect_retry:
 
         /* Read chunk_len data bytes from ring buffer (follows +QIRD: <len>\r\n) */
         uint16_t got = 0;
-        rt = HAL_GetTick();
+        uint32_t rt = HAL_GetTick();
         while (got < chunk_len && (HAL_GetTick() - rt) < 5000U) {
             if (at_tail != at_head) {
                 uint8_t byte = at_ring[at_tail];
