@@ -6,6 +6,7 @@
  */
 #include "ota_manager.h"
 #include "modem_hal.h"
+#include "rgb_led.h"
 #include "debug_cli.h"
 #include "display_ui.h"
 #include <string.h>
@@ -212,6 +213,9 @@ static OtaResult_t ota_download(const char *fw_url, uint32_t fw_size,
 
     Debug_Printf("[OTA] Downloading %lu bytes\r\n", fw_size);
     Debug_Printf("[OTA] URL: %s\r\n", fw_url);
+
+    /* Orange LED = OTA in progress */
+    RGB_YELLOW();
     Display_ShowUpdating(0, fw_size);
 
     /* Disconnect MQTT before HTTP download */
