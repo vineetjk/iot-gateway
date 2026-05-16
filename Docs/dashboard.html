@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delta IoT Gateway Dashboard</title>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<style>
+  :root {
+    --bg: #0f172a; --surface: #1e293b; --border: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
+    --green: #4ade80; --red: #f87171; --yellow: #fbbf24;
+    --radius: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* Header */
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header .subtitle { color: var(--muted); font-size: 13px; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .status-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.off { background: var(--red); }
+
+  /* Connection bar */
+  .conn-bar { background: var(--surface); padding: 12px 24px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .conn-bar input, .conn-bar select { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: var(--radius); font-size: 13px; }
+  .conn-bar input:focus { outline: none; border-color: var(--accent); }
+  .conn-bar label { color: var(--muted); font-size: 12px; }
+  .field { display: flex; flex-direction: column; gap: 2px; }
+
+  /* Buttons */
+  .btn { padding: 7px 16px; border: none; border-radius: var(--radius); cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; }
+  .btn-primary { background: var(--accent); color: #0f172a; }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-danger { background: var(--red); color: white; }
+  .btn-danger:hover { filter: brightness(1.1); }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:hover { border-color: var(--accent); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 24px; }
+  .tab { padding: 10px 20px; cursor: pointer; color: var(--muted); font-size: 14px; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* Content */
+  .content { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+  .card h3 { font-size: 14px; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* Parameter grid */
+  .param-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+  .param-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; text-align: center; transition: border-color 0.3s; }
+  .param-card.updated { border-color: var(--accent); }
+  .param-card .tag { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .param-card .value { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* Alarm grid */
+  .alarm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+  .alarm-chip { padding: 8px 12px; border-radius: var(--radius); font-size: 13px; font-weight: 600; text-align: center; transition: all 0.3s; }
+  .alarm-chip.active { background: var(--red); color: white; animation: pulse 1s infinite; }
+  .alarm-chip.inactive { background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+  /* Config form */
+  .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .config-grid .field { background: var(--bg); padding: 10px; border-radius: var(--radius); }
+  .config-grid .field label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .config-grid .field input, .config-grid .field select {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); padding: 6px 8px; border-radius: 4px; font-size: 13px;
+  }
+
+  /* Log */
+  .log-box { background: #000; color: #4ade80; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; padding: 12px; border-radius: var(--radius); height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .config-grid { grid-template-columns: 1fr; }
+    .param-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+    .conn-bar { flex-direction: column; }
+  }
+
+  /* Timestamp */
+  .ts { font-size: 11px; color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1>Delta IoT Gateway</h1>
+  <span class="status-dot" id="mqttDot"></span>
+  <span id="mqttStatus" style="font-size:13px; color:var(--muted)">Disconnected</span>
+  <span class="subtitle" id="deviceInfo" style="margin-left:auto"></span>
+</div>
+
+<!-- Connection bar -->
+<div class="conn-bar">
+  <div class="field">
+    <label>Broker (ws://)</label>
+    <input id="broker" value="broker.emqx.io" style="width:180px">
+  </div>
+  <div class="field">
+    <label>Port (WebSocket)</label>
+    <input id="port" value="8083" style="width:70px" type="number">
+  </div>
+  <div class="field">
+    <label>Device ID (hex)</label>
+    <input id="deviceId" placeholder="e.g. A3F7" style="width:100px">
+  </div>
+  <button class="btn btn-primary" id="connectBtn" onclick="toggleConnect()">Connect</button>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('monitor')">Monitor</div>
+  <div class="tab" onclick="switchTab('config')">Config</div>
+  <div class="tab" onclick="switchTab('log')">Log</div>
+</div>
+
+<!-- Monitor Panel -->
+<div class="content">
+<div class="tab-panel active" id="panel-monitor">
+  <div class="card">
+    <h3>Parameters <span id="paramTs" class="ts"></span></h3>
+    <div class="param-grid" id="paramGrid">
+      <div style="color:var(--muted); font-size:13px; grid-column:1/-1; text-align:center; padding:40px 0;">
+        Connect to a gateway to see live data
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Alarms <span id="alarmTs" class="ts"></span></h3>
+    <div class="alarm-grid" id="alarmGrid">
+      <div style="color:var(--muted); font-size:13px; grid-column:1/-1; text-align:center; padding:20px 0;">
+        No alarm data yet
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Config Panel -->
+<div class="tab-panel" id="panel-config">
+  <div class="card">
+    <h3>Device Settings</h3>
+    <div class="config-grid">
+      <div class="field"><label>Device Name</label><input id="cfg_device_name" placeholder="Delta-GW-001"></div>
+      <div class="field"><label>Poll Interval (ms)</label><input id="cfg_poll_interval" type="number" value="5000"></div>
+      <div class="field"><label>Publish Interval (ms)</label><input id="cfg_publish_interval" type="number" value="10000"></div>
+      <div class="field"><label>Delta Mode</label><select id="cfg_delta_mode"><option value="1">ON</option><option value="0">OFF</option></select></div>
+      <div class="field"><label>Delta Threshold</label><input id="cfg_delta_threshold" type="number" value="1"></div>
+      <div class="field"><label>Modbus Baud</label><select id="cfg_modbus_baud"><option>9600</option><option>19200</option><option>38400</option><option>115200</option></select></div>
+    </div>
+    <div style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn btn-primary" onclick="sendAllConfig()">Apply All</button>
+      <button class="btn btn-outline" onclick="sendCmd('save')">Save to Flash</button>
+      <button class="btn btn-danger" onclick="if(confirm('Reboot gateway?'))sendCmd('reboot')">Reboot</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>MQTT Settings</h3>
+    <div class="config-grid">
+      <div class="field"><label>APN</label><input id="cfg_apn" value="airtelgprs.com"></div>
+      <div class="field"><label>Broker</label><input id="cfg_broker" value="broker.emqx.io"></div>
+      <div class="field"><label>Broker Port</label><input id="cfg_broker_port" type="number" value="1883"></div>
+      <div class="field"><label>MQTT Topic</label><input id="cfg_mqtt_topic"></div>
+      <div class="field"><label>Alarm Topic</label><input id="cfg_alarm_topic"></div>
+      <div class="field"><label>QoS</label><select id="cfg_mqtt_qos"><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option></select></div>
+    </div>
+    <div style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="sendMqttConfig()">Apply MQTT Settings</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Register Management</h3>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+      <input id="reg_slave" placeholder="Slave (1)" style="width:70px" class="conn-bar">
+      <input id="reg_addr" placeholder="Addr (0x0000)" style="width:100px" class="conn-bar">
+      <select id="reg_fc" style="padding:6px; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:var(--radius);">
+        <option value="3">FC3 (Holding)</option><option value="4">FC4 (Input)</option>
+      </select>
+      <select id="reg_type" style="padding:6px; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:var(--radius);">
+        <option>u16</option><option>i16</option><option>u32</option><option>i32</option><option>f32</option>
+      </select>
+      <input id="reg_scale" placeholder="Scale (1.0)" style="width:80px" class="conn-bar">
+      <input id="reg_tag" placeholder="Tag (vtg)" style="width:80px" class="conn-bar">
+      <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted)">
+        <input type="checkbox" id="reg_alarm"> Alarm
+      </label>
+      <button class="btn btn-primary" onclick="addRegister()">Add Register</button>
+    </div>
+
+    <h3 style="margin-top:16px;">Alarm Bit Definitions</h3>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+      <input id="alm_reg" placeholder="Reg idx (0)" style="width:80px" class="conn-bar">
+      <input id="alm_bit" placeholder="Bit (0)" style="width:60px" class="conn-bar">
+      <input id="alm_name" placeholder="Name (OV)" style="width:80px" class="conn-bar">
+      <button class="btn btn-primary" onclick="addAlarmBit()">Add Alarm Bit</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Send Raw Command</h3>
+    <div style="display:flex;gap:8px;">
+      <input id="rawCmd" placeholder='e.g. {"cmd":"set","key":"poll_interval","val":"3000"}' style="flex:1; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:8px; border-radius:var(--radius); font-family:monospace; font-size:13px;">
+      <button class="btn btn-primary" onclick="sendRaw()">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log Panel -->
+<div class="tab-panel" id="panel-log">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <h3 style="margin:0;">MQTT Log</h3>
+      <button class="btn btn-outline" onclick="clearLog()">Clear</button>
+    </div>
+    <div class="log-box" id="logBox"></div>
+  </div>
+</div>
+</div>
+
+<script>
+let client = null;
+let deviceId = '';
+let topics = { data: '', alarms: '', cmd: '', resp: '' };
+
+function getTopics(id) {
+  return {
+    data:   `delta/gw/${id}/data`,
+    alarms: `delta/gw/${id}/alarms`,
+    cmd:    `delta/gw/${id}/cmd`,
+    resp:   `delta/gw/${id}/resp`,
+  };
+}
+
+function log(msg) {
+  const box = document.getElementById('logBox');
+  const ts = new Date().toLocaleTimeString();
+  box.textContent += `[${ts}] ${msg}\n`;
+  box.scrollTop = box.scrollHeight;
+}
+
+function clearLog() { document.getElementById('logBox').textContent = ''; }
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', t.textContent.toLowerCase().includes(name));
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === `panel-${name}`);
+  });
+}
+
+function setConnected(on) {
+  document.getElementById('mqttDot').className = `status-dot ${on ? 'on' : 'off'}`;
+  document.getElementById('mqttStatus').textContent = on ? 'Connected' : 'Disconnected';
+  document.getElementById('connectBtn').textContent = on ? 'Disconnect' : 'Connect';
+}
+
+function toggleConnect() {
+  if (client && client.connected) {
+    client.end();
+    client = null;
+    setConnected(false);
+    log('Disconnected');
+    return;
+  }
+
+  const broker = document.getElementById('broker').value;
+  const port = document.getElementById('port').value;
+  deviceId = document.getElementById('deviceId').value.toUpperCase();
+
+  if (!deviceId) { alert('Enter Device ID (hex)'); return; }
+
+  topics = getTopics(deviceId);
+  const url = `ws://${broker}:${port}/mqtt`;
+
+  log(`Connecting to ${url} for device ${deviceId}...`);
+
+  client = mqtt.connect(url, {
+    clientId: `dashboard-${Date.now()}`,
+    clean: true,
+    connectTimeout: 5000,
+  });
+
+  client.on('connect', () => {
+    setConnected(true);
+    log('MQTT connected');
+    document.getElementById('deviceInfo').textContent = `Device: ${deviceId}`;
+
+    // Subscribe to data, alarms, and response topics
+    client.subscribe(topics.data, { qos: 0 });
+    client.subscribe(topics.alarms, { qos: 0 });
+    client.subscribe(topics.resp, { qos: 0 });
+    log(`Subscribed: ${topics.data}, ${topics.alarms}, ${topics.resp}`);
+
+    // Also subscribe with legacy topics in case device uses old format
+    client.subscribe('delta/gw/data', { qos: 0 });
+    client.subscribe('delta/gw/alarms', { qos: 0 });
+  });
+
+  client.on('message', (topic, msg) => {
+    const payload = msg.toString();
+    log(`< ${topic}: ${payload}`);
+
+    try {
+      const data = JSON.parse(payload);
+      if (topic.endsWith('/data') || topic === 'delta/gw/data') {
+        updateParams(data);
+      } else if (topic.endsWith('/alarms') || topic === 'delta/gw/alarms') {
+        updateAlarms(data);
+      } else if (topic.endsWith('/resp')) {
+        log(`[RESP] ${payload}`);
+      }
+    } catch (e) {
+      log(`[WARN] Non-JSON: ${payload}`);
+    }
+  });
+
+  client.on('error', (err) => {
+    log(`ERROR: ${err.message}`);
+    setConnected(false);
+  });
+
+  client.on('close', () => setConnected(false));
+}
+
+function updateParams(data) {
+  const grid = document.getElementById('paramGrid');
+  const skip = ['id', 'name', 'ts', 'seq'];
+
+  // Update device info
+  if (data.name) {
+    document.getElementById('deviceInfo').textContent =
+      `${data.name} | ID: ${deviceId} | seq: ${data.seq || '-'}`;
+  }
+
+  // Extract parameter keys
+  const params = Object.entries(data).filter(([k]) => !skip.includes(k));
+
+  if (params.length === 0 && grid.children.length <= 1) return;
+
+  // Build or update cards
+  params.forEach(([key, val]) => {
+    let card = document.getElementById(`param-${key}`);
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'param-card';
+      card.id = `param-${key}`;
+      card.innerHTML = `<div class="tag">${key}</div><div class="value">--</div>`;
+      // Remove placeholder if present
+      const placeholder = grid.querySelector('[style*="grid-column"]');
+      if (placeholder) placeholder.remove();
+      grid.appendChild(card);
+    }
+    card.querySelector('.value').textContent = val;
+    card.classList.add('updated');
+    setTimeout(() => card.classList.remove('updated'), 1000);
+  });
+
+  // Update timestamp
+  if (data.ts) {
+    const d = new Date(data.ts * 1000);
+    document.getElementById('paramTs').textContent =
+      `Last: ${d.toLocaleTimeString()}`;
+  }
+}
+
+function updateAlarms(data) {
+  const grid = document.getElementById('alarmGrid');
+  const skip = ['id', 'ts'];
+
+  const alarms = Object.entries(data).filter(([k]) => !skip.includes(k));
+  if (alarms.length === 0) return;
+
+  // Remove placeholder
+  const placeholder = grid.querySelector('[style*="grid-column"]');
+  if (placeholder) placeholder.remove();
+
+  alarms.forEach(([key, val]) => {
+    let chip = document.getElementById(`alarm-${key}`);
+    if (!chip) {
+      chip = document.createElement('div');
+      chip.id = `alarm-${key}`;
+      grid.appendChild(chip);
+    }
+    const active = Number(val) !== 0;
+    chip.className = `alarm-chip ${active ? 'active' : 'inactive'}`;
+    chip.textContent = `${key}: ${active ? 'ON' : 'OK'}`;
+  });
+
+  if (data.ts) {
+    const d = new Date(data.ts * 1000);
+    document.getElementById('alarmTs').textContent =
+      `Last: ${d.toLocaleTimeString()}`;
+  }
+}
+
+// ── Config Commands ──────────────────────────────────────────
+function sendCmd(cmd) {
+  if (!client || !client.connected) { alert('Not connected'); return; }
+  const msg = JSON.stringify({ cmd: cmd });
+  client.publish(topics.cmd, msg);
+  log(`> ${topics.cmd}: ${msg}`);
+}
+
+function sendSetCmd(key, val) {
+  if (!client || !client.connected) return;
+  const msg = JSON.stringify({ cmd: 'set', key: key, val: String(val) });
+  client.publish(topics.cmd, msg);
+  log(`> ${topics.cmd}: ${msg}`);
+}
+
+function sendAllConfig() {
+  const fields = [
+    ['device_name', 'cfg_device_name'],
+    ['poll_interval', 'cfg_poll_interval'],
+    ['publish_interval', 'cfg_publish_interval'],
+    ['delta_mode', 'cfg_delta_mode'],
+    ['delta_threshold', 'cfg_delta_threshold'],
+    ['modbus_baud', 'cfg_modbus_baud'],
+  ];
+  fields.forEach(([key, elId]) => {
+    const el = document.getElementById(elId);
+    const val = el.value || el.options?.[el.selectedIndex]?.value;
+    if (val) sendSetCmd(key, val);
+  });
+}
+
+function sendMqttConfig() {
+  const fields = [
+    ['apn', 'cfg_apn'],
+    ['broker', 'cfg_broker'],
+    ['broker_port', 'cfg_broker_port'],
+    ['mqtt_topic', 'cfg_mqtt_topic'],
+    ['alarm_topic', 'cfg_alarm_topic'],
+    ['mqtt_qos', 'cfg_mqtt_qos'],
+  ];
+  fields.forEach(([key, elId]) => {
+    const el = document.getElementById(elId);
+    const val = el.value || el.options?.[el.selectedIndex]?.value;
+    if (val) sendSetCmd(key, val);
+  });
+}
+
+function addRegister() {
+  if (!client || !client.connected) { alert('Not connected'); return; }
+  const slave = document.getElementById('reg_slave').value || '1';
+  const addr  = document.getElementById('reg_addr').value || '0x0000';
+  const fc    = document.getElementById('reg_fc').value;
+  const type  = document.getElementById('reg_type').value;
+  const scale = document.getElementById('reg_scale').value || '1.0';
+  const tag   = document.getElementById('reg_tag').value || 'r0';
+  const alarm = document.getElementById('reg_alarm').checked;
+
+  const msg = `reg_add,${slave},${addr},${fc},${type},${scale},${tag},${alarm?1:0}`;
+  client.publish(topics.cmd, msg);
+  log(`> ${topics.cmd}: ${msg}`);
+}
+
+function addAlarmBit() {
+  if (!client || !client.connected) { alert('Not connected'); return; }
+  const reg  = document.getElementById('alm_reg').value;
+  const bit  = document.getElementById('alm_bit').value;
+  const name = document.getElementById('alm_name').value;
+  if (!name) { alert('Enter alarm name'); return; }
+
+  const msg = `alarm_add,${reg},${bit},${name}`;
+  client.publish(topics.cmd, msg);
+  log(`> ${topics.cmd}: ${msg}`);
+}
+
+function sendRaw() {
+  if (!client || !client.connected) { alert('Not connected'); return; }
+  const raw = document.getElementById('rawCmd').value;
+  if (!raw) return;
+  client.publish(topics.cmd, raw);
+  log(`> ${topics.cmd}: ${raw}`);
+  document.getElementById('rawCmd').value = '';
+}
+</script>
+</body>
+</html>

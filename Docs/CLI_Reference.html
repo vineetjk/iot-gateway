@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Gateway CLI Reference</title>
+<style>
+@page{size:A4;margin:12mm}
+body{font-family:Consolas,monospace;font-size:9pt;padding:10mm}
+h1{font-size:13pt;text-align:center;border-bottom:2px solid #000;padding-bottom:4px}
+h2{font-size:10pt;background:#222;color:#fff;padding:2px 8px;margin-top:10px}
+table{width:100%;border-collapse:collapse;font-size:8.5pt;margin:4px 0}
+th,td{border:1px solid #333;padding:2px 5px;text-align:left}
+th{background:#e0e0e0}
+.cmd{font-weight:bold;color:#006}
+.ex{background:#f5f5f5;padding:4px;margin:3px 0;font-size:8pt;border:1px solid #ccc}
+.note{font-size:8pt;color:#555;margin:2px 0}
+</style></head><body>
+
+<h1>Delta IoT Gateway — CLI Command Reference</h1>
+<p style="text-align:center;font-size:8pt">USART3 (PB10/PB11) | 115200 8N1 | Type 'help' for list</p>
+
+<h2>Display Commands</h2>
+<table>
+<tr><th>Command</th><th>Description</th></tr>
+<tr><td class="cmd">help</td><td>Show command list</td></tr>
+<tr><td class="cmd">show config</td><td>Print full configuration</td></tr>
+<tr><td class="cmd">show regs</td><td>Print register table</td></tr>
+<tr><td class="cmd">i2cscan</td><td>Scan I2C1 bus for devices</td></tr>
+</table>
+
+<h2>Device Settings</h2>
+<table>
+<tr><th>Command</th><th>Description</th><th>Example</th></tr>
+<tr><td class="cmd">set device_id &lt;n&gt;</td><td>Set device ID (uint16)</td><td>set device_id 5</td></tr>
+<tr><td class="cmd">set device_name &lt;str&gt;</td><td>Set device name (max 31 chars)</td><td>set device_name MyGateway</td></tr>
+</table>
+
+<h2>Modbus Settings</h2>
+<table>
+<tr><th>Command</th><th>Description</th><th>Values</th></tr>
+<tr><td class="cmd">set modbus_baud &lt;n&gt;</td><td>Baud rate</td><td>9600 / 19200 / 38400 / 115200</td></tr>
+<tr><td class="cmd">set modbus_parity &lt;n&gt;</td><td>Parity</td><td>0=None, 1=Even, 2=Odd</td></tr>
+<tr><td class="cmd">set modbus_stopbits &lt;n&gt;</td><td>Stop bits</td><td>1 or 2</td></tr>
+<tr><td class="cmd">set modbus_timeout &lt;ms&gt;</td><td>Response timeout</td><td>100–5000</td></tr>
+<tr><td class="cmd">set poll_interval &lt;ms&gt;</td><td>Poll cycle interval</td><td>1000–60000</td></tr>
+</table>
+
+<h2>Register Management</h2>
+<table>
+<tr><th>Command</th><th>Description</th></tr>
+<tr><td class="cmd">reg add &lt;slave&gt; &lt;addr&gt; &lt;fc&gt; &lt;type&gt; &lt;scale&gt; &lt;tag&gt;</td><td>Add a register</td></tr>
+<tr><td class="cmd">reg del &lt;index&gt;</td><td>Delete register by index</td></tr>
+<tr><td class="cmd">reg list</td><td>List all registers</td></tr>
+</table>
+<div class="ex">
+<b>reg add</b> parameters:<br>
+&nbsp;&nbsp;slave: 1–247 (Modbus address)<br>
+&nbsp;&nbsp;addr: 0x0000–0xFFFF (register address)<br>
+&nbsp;&nbsp;fc: 3=holding, 4=input<br>
+&nbsp;&nbsp;type: u16, i16, u32, i32, f32<br>
+&nbsp;&nbsp;scale: multiplier (float)<br>
+&nbsp;&nbsp;tag: name string (max 19 chars)<br><br>
+<b>Examples:</b><br>
+&nbsp;&nbsp;reg add 1 0x0000 3 u16 0.1 voltage<br>
+&nbsp;&nbsp;reg add 1 0x0002 3 u32 1.0 energy_kwh<br>
+&nbsp;&nbsp;reg add 2 0x0010 4 f32 1.0 temperature
+</div>
+
+<h2>GSM / MQTT Settings</h2>
+<table>
+<tr><th>Command</th><th>Description</th><th>Example</th></tr>
+<tr><td class="cmd">set apn &lt;str&gt;</td><td>APN for mobile data</td><td>set apn airtelgprs.com</td></tr>
+<tr><td class="cmd">set broker &lt;str&gt;</td><td>MQTT broker hostname</td><td>set broker broker.emqx.io</td></tr>
+<tr><td class="cmd">set broker_port &lt;n&gt;</td><td>MQTT broker port</td><td>set broker_port 1883</td></tr>
+<tr><td class="cmd">set mqtt_client &lt;str&gt;</td><td>MQTT client ID</td><td>set mqtt_client gw-001</td></tr>
+<tr><td class="cmd">set mqtt_user &lt;str&gt;</td><td>MQTT username</td><td>set mqtt_user admin</td></tr>
+<tr><td class="cmd">set mqtt_pass &lt;str&gt;</td><td>MQTT password</td><td>set mqtt_pass secret</td></tr>
+<tr><td class="cmd">set mqtt_topic &lt;str&gt;</td><td>Publish topic</td><td>set mqtt_topic delta/gw/data</td></tr>
+<tr><td class="cmd">set mqtt_qos &lt;n&gt;</td><td>QoS level</td><td>0, 1, or 2</td></tr>
+</table>
+
+<h2>Telemetry Settings</h2>
+<table>
+<tr><th>Command</th><th>Description</th><th>Example</th></tr>
+<tr><td class="cmd">set publish_interval &lt;ms&gt;</td><td>Publish cycle</td><td>set publish_interval 10000</td></tr>
+<tr><td class="cmd">set delta_mode &lt;0|1&gt;</td><td>Delta mode on/off</td><td>set delta_mode 0</td></tr>
+<tr><td class="cmd">set delta_threshold &lt;n&gt;</td><td>Change threshold</td><td>set delta_threshold 5</td></tr>
+</table>
+
+<h2>System Commands</h2>
+<table>
+<tr><th>Command</th><th>Description</th></tr>
+<tr><td class="cmd">save</td><td>Save config to internal flash</td></tr>
+<tr><td class="cmd">reset</td><td>Load factory defaults (not saved until 'save')</td></tr>
+<tr><td class="cmd">reboot</td><td>Software reset (NVIC_SystemReset)</td></tr>
+</table>
+
+<h2>LED Status Indicator</h2>
+<table>
+<tr><th>Color</th><th>Pattern</th><th>State</th></tr>
+<tr><td style="color:blue">Blue</td><td>Solid</td><td>Booting</td></tr>
+<tr><td style="color:green">Green</td><td>Solid</td><td>Idle OK</td></tr>
+<tr><td style="color:teal">Cyan</td><td>Blink 300ms</td><td>Reading Modbus</td></tr>
+<tr><td style="color:blue">Blue</td><td>Blink 120ms</td><td>MQTT Upload</td></tr>
+<tr><td style="color:red">Red</td><td>Solid</td><td>Modbus Error</td></tr>
+<tr><td style="color:red">Red</td><td>Blink 600ms</td><td>GSM Error</td></tr>
+<tr><td style="color:purple">Purple</td><td>Blink 400ms</td><td>No Network</td></tr>
+</table>
+
+<p class="note" style="margin-top:12px;text-align:center">PC13 (built-in LED) blinks every 500ms = main loop running</p>
+</body></html>

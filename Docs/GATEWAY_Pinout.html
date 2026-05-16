@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GATEWAY - Pin Diagram & Connection Guide</title>
+<style>
+    @page { size: A4; margin: 10mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Consolas', 'Courier New', monospace; font-size: 9pt; color: #111; background: #fff; padding: 10mm; }
+    h1 { font-size: 13pt; text-align: center; margin-bottom: 3px; border-bottom: 2px solid #000; padding-bottom: 3px; }
+    h2 { font-size: 10pt; margin-top: 10px; margin-bottom: 3px; background: #222; color: #fff; padding: 2px 8px; }
+    h3 { font-size: 9pt; margin-top: 6px; margin-bottom: 2px; }
+    .subtitle { text-align: center; font-size: 8pt; color: #555; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; margin: 3px 0 6px 0; font-size: 8pt; }
+    th, td { border: 1px solid #333; padding: 1px 4px; text-align: left; }
+    th { background: #e0e0e0; font-weight: bold; }
+    .pin-col { width: 50px; font-weight: bold; }
+    .func-col { width: 80px; }
+    .two-col { display: flex; gap: 8px; }
+    .two-col > div { flex: 1; }
+    .conn-box { border: 1px solid #000; padding: 4px; margin: 3px 0; background: #f8f8f0; }
+    .conn-title { font-weight: bold; font-size: 8.5pt; margin-bottom: 2px; }
+    .conn-pre { font-size: 7pt; line-height: 1.2; white-space: pre; font-family: 'Consolas', monospace; }
+    .warn { background: #fff3cd; border: 1px solid #ffc107; padding: 2px 5px; margin: 3px 0; font-size: 7.5pt; }
+    .page-break { page-break-before: always; }
+    .footer { margin-top: 8px; text-align: center; font-size: 7pt; color: #888; border-top: 1px solid #ccc; padding-top: 3px; }
+    .mermaid { margin: 6px 0; max-height: 260px; overflow: hidden; }
+    .mermaid svg { max-width: 100% !important; max-height: 250px !important; }
+    @media print {
+        .mermaid svg { max-height: 240px !important; page-break-inside: avoid; }
+        .no-break { page-break-inside: avoid; }
+    }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis', nodeSpacing: 20, rankSpacing: 30 },
+            securityLevel: 'loose'
+        });
+    });
+</script>
+</head>
+<body>
+
+<!-- ======================== PAGE 1 ======================== -->
+<h1>DELTA IoT GATEWAY - Connection Guide</h1>
+<p class="subtitle">STM32F103C8T6 | Rev 1.0 | A4 Printable</p>
+
+<h2>1. Pin Assignment</h2>
+<div class="two-col">
+<div>
+<table>
+<tr><th class="pin-col">Pin</th><th class="func-col">Function</th><th>Connected To</th></tr>
+<tr><td>PA2</td><td>USART2_TX</td><td>A7670C RX</td></tr>
+<tr><td>PA3</td><td>USART2_RX</td><td>A7670C TX</td></tr>
+<tr><td>PA4</td><td>GPIO OUT</td><td>RS-485 DE/RE</td></tr>
+<tr><td>PA5</td><td>SPI1_SCK</td><td>W25Q64 CLK</td></tr>
+<tr><td>PA6</td><td>SPI1_MISO</td><td>W25Q64 DO</td></tr>
+<tr><td>PA7</td><td>SPI1_MOSI</td><td>W25Q64 DI</td></tr>
+<tr><td>PA8</td><td>GPIO OUT</td><td>W25Q64 /CS</td></tr>
+<tr><td>PA9</td><td>USART1_TX</td><td>CH340 RX (USB-C CLI)</td></tr>
+<tr><td>PA10</td><td>USART1_RX</td><td>CH340 TX (USB-C CLI)</td></tr>
+<tr><td>PA13</td><td>SWDIO</td><td>ST-Link</td></tr>
+<tr><td>PA14</td><td>SWCLK</td><td>ST-Link</td></tr>
+</table>
+</div>
+<div>
+<table>
+<tr><th class="pin-col">Pin</th><th class="func-col">Function</th><th>Connected To</th></tr>
+<tr><td>PB0</td><td>GPIO OUT</td><td>LED Red (270R)</td></tr>
+<tr><td>PB1</td><td>GPIO OUT</td><td>LED Green (270R)</td></tr>
+<tr><td>PB3</td><td>GPIO OUT</td><td>LED Blue (270R)</td></tr>
+<tr><td>PB4</td><td>GPIO OUT</td><td>A7670C RESET (active LOW)</td></tr>
+<tr><td>PB6</td><td>I2C1_SCL</td><td>SSD1306 SCL</td></tr>
+<tr><td>PB7</td><td>I2C1_SDA</td><td>SSD1306 SDA</td></tr>
+<tr><td>PB10</td><td>USART3_TX</td><td>MAX485 DI (RS-485)</td></tr>
+<tr><td>PB11</td><td>USART3_RX</td><td>MAX485 RO (RS-485)</td></tr>
+</table>
+</div>
+</div>
+
+<h2>2. Wiring Diagrams</h2>
+<div class="two-col">
+<div>
+<div class="conn-box no-break">
+<div class="conn-title">A. RS-485 Modbus (USART3 9600 8N1)</div>
+<pre class="conn-pre">STM32         MAX485         BUS
+PB10(TX) ──► DI        A ─── A(+)─┐
+PB11(RX) ◄── RO        B ─── B(-)─┤120R
+PA4(DE)  ──► DE+RE     GND── GND  ─┘
+3.3V ─────── VCC
+GND ──────── GND</pre>
+</div>
+
+<div class="conn-box no-break">
+<div class="conn-title">B. OLED (I2C1 400kHz, Addr 0x3C)</div>
+<pre class="conn-pre">STM32        SSD1306
+PB6(SCL)─┬── SCL    3.3V── VCC
+        4.7k         GND ── GND
+3.3V────┘
+PB7(SDA)─┬── SDA
+        4.7k
+3.3V────┘</pre>
+</div>
+
+<div class="conn-box no-break">
+<div class="conn-title">C. RGB LED (Common Anode)</div>
+<pre class="conn-pre">PB0 ──[270R]── R  (LOW=ON)
+PB1 ──[270R]── G  (LOW=ON)
+PB3 ──[270R]── B  (LOW=ON)
+3.3V────────── A (Anode)</pre>
+</div>
+</div>
+
+<div>
+<div class="conn-box no-break">
+<div class="conn-title">D. A7670C GSM (USART2 115200 8N1)</div>
+<pre class="conn-pre">STM32        A7670C
+PA2(TX) ──► RXD
+PA3(RX) ◄── TXD
+PB4 ──────► PWRKEY (LOW 1.5s to ON)
+GND ──────── GND
+
+POWER: 3.8V LDO ── VBAT (3.4-4.2V)
+       1000uF cap near VBAT!</pre>
+<div class="warn">DO NOT power A7670C from 3.3V! Needs 3.8V @ 2A peak.</div>
+</div>
+
+<div class="conn-box no-break">
+<div class="conn-title">E. W25Q64 SPI Flash (SPI1 18MHz)</div>
+<pre class="conn-pre">STM32        W25Q64 (SOIC-8)
+PA5(SCK) ──► CLK   (pin6)
+PA6(MISO)◄── DO    (pin2)
+PA7(MOSI)──► DI    (pin5)
+PA8(CS)  ──► /CS   (pin1)
+3.3V ─────── VCC   (pin8)
+GND ──────── GND   (pin4)
+3.3V─[10k]── /HOLD (pin7)
+3.3V─[10k]── /WP   (pin3)</pre>
+</div>
+
+<div class="conn-box no-break">
+<div class="conn-title">F. ST-Link SWD</div>
+<pre class="conn-pre">SWDIO── PA13   GND── GND
+SWCLK── PA14   3.3V─ 3.3V (or ext)
+NRST ── NRST (optional)</pre>
+</div>
+</div>
+</div>
+
+<!-- ======================== PAGE 2 ======================== -->
+<div class="page-break"></div>
+<h1>DELTA IoT GATEWAY - Reference Tables</h1>
+<p class="subtitle">Page 2</p>
+
+<h2>3. UART Summary</h2>
+<table>
+<tr><th>Peripheral</th><th>Baud</th><th>TX</th><th>RX</th><th>Purpose</th><th>Device</th></tr>
+<tr><td>USART1</td><td>115200</td><td>PA9</td><td>PA10</td><td>Debug CLI</td><td>CH340 USB-C (on board)</td></tr>
+<tr><td>USART2</td><td>115200</td><td>PA2</td><td>PA3</td><td>GSM AT Commands</td><td>A7670C module</td></tr>
+<tr><td>USART3</td><td>9600</td><td>PB10</td><td>PB11</td><td>Modbus RTU Master</td><td>MAX485 &rarr; RS-485 bus</td></tr>
+</table>
+
+<h2>4. Flash Memory Map</h2>
+<div class="two-col">
+<div>
+<h3>Internal Flash (128KB)</h3>
+<table>
+<tr><th>Address</th><th>Size</th><th>Content</th></tr>
+<tr><td>0x08000000</td><td>12 KB</td><td>Bootloader (flash once via ST-Link)</td></tr>
+<tr><td>0x08003000</td><td>108 KB</td><td>Application (serial/OTA updatable)</td></tr>
+<tr><td>0x0801E000</td><td>2 KB</td><td>Config Page A</td></tr>
+<tr><td>0x0801E800</td><td>2 KB</td><td>Config Page B</td></tr>
+</table>
+</div>
+<div>
+<h3>W25Q64 External (8MB)</h3>
+<table>
+<tr><th>Address</th><th>Size</th><th>Content</th></tr>
+<tr><td>0x000000</td><td>4 KB</td><td>OTA Metadata</td></tr>
+<tr><td>0x001000</td><td>128 KB</td><td>FW Slot A (download)</td></tr>
+<tr><td>0x021000</td><td>128 KB</td><td>FW Slot B (backup)</td></tr>
+<tr><td>0x041000</td><td>16 KB</td><td>Config Mirror</td></tr>
+<tr><td>0x045000</td><td>~7 MB</td><td>Telemetry Ring Buffer</td></tr>
+</table>
+</div>
+</div>
+
+<h2>5. Power Requirements</h2>
+<table>
+<tr><th>Rail</th><th>Voltage</th><th>Current</th><th>Source</th><th>Feeds</th></tr>
+<tr><td>VCC_MCU</td><td>3.3V</td><td>~100mA</td><td>LDO from 5V</td><td>STM32, OLED, W25Q64, MAX485</td></tr>
+<tr><td>VCC_GSM</td><td>3.8V</td><td>2A peak</td><td>Dedicated LDO + 1000uF</td><td>A7670C only</td></tr>
+</table>
+
+<h2>6. LED Status Codes</h2>
+<table>
+<tr><th>Color</th><th>Pattern</th><th>Meaning</th></tr>
+<tr><td style="color:blue">Blue</td><td>Solid</td><td>Booting</td></tr>
+<tr><td style="color:green">Green</td><td>Solid</td><td>Idle - OK</td></tr>
+<tr><td style="color:teal">Cyan</td><td>Blink 300ms</td><td>Reading Modbus</td></tr>
+<tr><td style="color:blue">Blue</td><td>Blink 120ms</td><td>Sending MQTT</td></tr>
+<tr><td style="color:red">Red</td><td>Solid</td><td>Modbus error</td></tr>
+<tr><td style="color:red">Red</td><td>Blink 600ms</td><td>GSM error</td></tr>
+<tr><td style="color:purple">Purple</td><td>Blink 400ms</td><td>No network</td></tr>
+</table>
+
+<div class="footer">
+    GATEWAY v1.0 | STM32F103C8T6 | Print Date: _____________
+</div>
+
+<!-- ======================== PAGE 3 ======================== -->
+<div class="page-break"></div>
+<h1>DELTA IoT GATEWAY - Block Diagrams</h1>
+<p class="subtitle">Page 3</p>
+
+<h2>7. System Block Diagram</h2>
+<div class="mermaid">
+graph LR
+    subgraph PSU["Power"]
+        V5["5V In"] --> L33["3.3V LDO"]
+        V5 --> L38["3.8V LDO"]
+    end
+    subgraph MCU["STM32F103C8"]
+        U1["USART1"] --- U2["USART2"] --- U3["USART3"]
+        SP["SPI1"] --- IC["I2C1"] --- GP["GPIO"]
+    end
+    L33 -.- MCU
+    L38 -.- GSM["A7670C<br/>GSM/LTE"]
+    U1 <--> DBG["CH340 USB-C<br/>Debug CLI"]
+    U2 <--> GSM
+    U3 <--> M485["MAX485"] <--> MB["Modbus<br/>Slaves"]
+    SP <--> FL["W25Q64<br/>8MB Flash"]
+    IC <--> OL["SSD1306<br/>OLED"]
+    GP --> LED["RGB LED"]
+    GSM <-.-> CLD["MQTT Cloud"]
+</div>
+
+<h2>8. Data Flow</h2>
+<div class="mermaid">
+graph LR
+    A["Modbus<br/>Slaves"] -->|RS-485| B["Poll Regs"]
+    B --> C{"Delta?"}
+    C -->|Changed| D["Build Frame"]
+    C -->|No change| E["Skip"]
+    D --> F{"GSM OK?"}
+    F -->|Yes| G["MQTT Pub"]
+    F -->|No| H["SPI Log"]
+    H -->|Reconnect| G
+</div>
+
+<h2>9. OTA Update Flow</h2>
+<div class="mermaid">
+flowchart TD
+    A["Boot"] --> B{"OTA Flag?"}
+    B -->|No| C{"App Valid?"}
+    B -->|Yes| D["Backup to Slot B"]
+    D --> E["Flash Slot A to MCU"]
+    E --> F{"CRC OK?"}
+    F -->|Yes| G["Mark SUCCESS"]
+    F -->|No| H["Rollback Slot B"]
+    G --> C
+    H --> C
+    C -->|Yes| I["Jump to App"]
+    C -->|No| J["HALT"]
+    I --> K{"1st OTA boot?"}
+    K -->|Yes| L{"GSM Up?"}
+    L -->|Yes| M["Confirm Boot"]
+    L -->|No| N["Risk rollback"]
+    K -->|No| O["Normal Run"]
+</div>
+
+<div class="footer">
+    Diagrams rendered with Mermaid.js | Requires browser/internet for first render before printing
+</div>
+
+</body>
+</html>
