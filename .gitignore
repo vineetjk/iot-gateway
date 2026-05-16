@@ -2,10 +2,8 @@
 Debug/
 Release/
 
-# IDE settings (user-specific)
+# IDE settings
 .settings/
-.cproject
-.project
 
 # OS files
 Thumbs.db
