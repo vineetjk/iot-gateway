@@ -245,11 +245,13 @@ int main(void)
 
     /* ── 3. Peripheral drivers ── */
     RGB_Init();
-    RGB_BLUE();   /* boot indicator */
     Debug_Print("[BOOT] RGB OK\r\n");
 
-    /* Blink 3 times fast to show we're alive before I2C */
-    for (int i=0; i<6; i++) { HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13); HAL_Delay(100); }
+    /* R-G-B boot sequence */
+    RGB_RED();   HAL_Delay(200);
+    RGB_GREEN(); HAL_Delay(200);
+    RGB_BLUE();  HAL_Delay(200);
+    RGB_OFF();
 
     Debug_Print("[BOOT] I2C OLED init...\r\n");
     SSD1306_Init(&hi2c1);

@@ -323,10 +323,20 @@ static bool q_set_url(const char *url)
     char *cmd = at_work;
     bool use_ssl = (strncmp(url, "https://", 8) == 0);
 
+    /* Bind HTTP to PDP context 1 and ensure it's active */
+    AT_Cmd("AT+QHTTPCFG=\"contextid\",1", "OK", 2000U);
+    if (!AT_Cmd("AT+QIACT?", "+QIACT: 1", 2000U)) {
+        Debug_Print("[QEC] PDP down, reactivating...\r\n");
+        AT_Cmd("AT+QIACT=1", "OK", 30000U);
+    }
+
     /* Configure SSL */
     if (use_ssl) {
         AT_Cmd("AT+QHTTPCFG=\"sslctxid\",1", "OK", 2000U);
+        AT_Cmd("AT+QSSLCFG=\"sslversion\",1,4", "OK", 2000U);
+        AT_Cmd("AT+QSSLCFG=\"ciphersuite\",1,0xFFFF", "OK", 2000U);
         AT_Cmd("AT+QSSLCFG=\"seclevel\",1,0", "OK", 2000U);
+        AT_Cmd("AT+QSSLCFG=\"sni\",1,1", "OK", 2000U);
     } else {
         AT_Cmd("AT+QHTTPCFG=\"sslctxid\",0", "OK", 2000U);
     }
@@ -437,7 +447,20 @@ static GsmResult_t quectel_http_download_to_flash(
     AT_RxFlush();
     AT_Send("AT+QHTTPGET=90");
     uint32_t file_len = q_parse_httpget();
-    if (!file_len) return GSM_ERR_HTTP_FAIL;
+    if (!file_len) {
+        /* Query last error for diagnostics */
+        AT_RxFlush();
+        AT_Send("AT+QIGETERROR");
+        HAL_Delay(500);
+        char ebuf[80] = {0};
+        uint16_t ei = 0;
+        while (at_tail != at_head && ei < 79) {
+            ebuf[ei++] = (char)at_ring[at_tail];
+            at_tail = (at_tail + 1U) % AT_RX_SIZE;
+        }
+        Debug_Printf("[QEC] QIGETERROR: %s\r\n", ebuf);
+        return GSM_ERR_HTTP_FAIL;
+    }
 
     Debug_Printf("[QEC] File ready: %lu bytes\r\n", file_len);
 
