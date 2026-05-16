@@ -580,30 +580,41 @@ redirect_retry:
     const char *close_cmd = ssl ? "AT+QSSLCLOSE=0" : "AT+QICLOSE=0";
     const char *read_cmd = ssl ? "AT+QSSLRECV=0,512" : "AT+QIRD=0,512";
 
-    /* Read data in chunks via AT+QIRD / AT+QSSLRECV */
+    /* Read data in chunks via AT+QIRD / AT+QSSLRECV.
+     * Response format: \r\n+QSSLRECV: <len>\r\n<data>\r\nOK\r\n */
     const char *resp_prefix = ssl ? "+QSSLRECV:" : "+QIRD:";
-    uint8_t prefix_len = ssl ? 10 : 6;
 
     while ((HAL_GetTick() - t) < 120000U) {
         AT_RxFlush();
         AT_Send(read_cmd);
         HAL_Delay(100);
 
-        /* Parse response: +QIRD: <len>\r\n<data> or +QSSLRECV: <len>\r\n<data> */
-        char rbuf[40] = {0};
-        uint16_t ri = 0;
-        uint32_t rt = HAL_GetTick();
-        while ((HAL_GetTick() - rt) < 3000U && ri < 39) {
-            if (at_tail != at_head) {
-                rbuf[ri++] = (char)at_ring[at_tail];
-                at_tail = (at_tail + 1U) % AT_RX_SIZE;
-                if (strstr(rbuf, resp_prefix) && strchr(rbuf, '\n')) break;
+        /* Wait for and parse: +QSSLRECV: <len>\r\n or +QIRD: <len>\r\n
+         * We need to find the prefix, read the length, then skip to \n
+         * without consuming any data bytes after \n */
+        uint16_t chunk_len = 0;
+        {
+            char lbuf[48] = {0};
+            uint16_t li = 0;
+            uint32_t rt = HAL_GetTick();
+            bool found_nl = false;
+            while ((HAL_GetTick() - rt) < 5000U && li < 47) {
+                if (at_tail != at_head) {
+                    lbuf[li++] = (char)at_ring[at_tail];
+                    at_tail = (at_tail + 1U) % AT_RX_SIZE;
+                    /* Look for the \n AFTER the prefix (end of header line) */
+                    char *pfx = strstr(lbuf, resp_prefix);
+                    if (pfx && strchr(pfx, '\n')) {
+                        chunk_len = (uint16_t)atoi(strchr(pfx, ':') + 1);
+                        found_nl = true;
+                        break;
+                    }
+                } else {
+                    HAL_Delay(1);
+                }
             }
-            HAL_Delay(1);
+            if (!found_nl) chunk_len = 0;
         }
-
-        char *qird = strstr(rbuf, resp_prefix);
-        uint16_t chunk_len = qird ? (uint16_t)atoi(qird + prefix_len) : 0;
 
         if (chunk_len == 0) {
             /* No more data — check if connection closed */
