@@ -556,14 +556,16 @@ redirect_retry:
     }
     Debug_Print("[QEC] GET sent, reading response...\r\n");
 
-    /* Buffer access mode: wait for data, then read with AT+QIRD.
-     * Wait for +QIURC: "recv" notification that data is available. */
-    if (!AT_Wait("+QIURC:", 30000U)) {
+    /* Buffer access mode: wait for recv notification.
+     * TCP: +QIURC: "recv",0  |  SSL: +QSSLURC: "recv",0 */
+    if (!AT_Wait("recv", 30000U)) {
         Debug_Print("[QEC] No data received\r\n");
         AT_Cmd(ssl ? "AT+QSSLCLOSE=0" : "AT+QICLOSE=0", "OK", 5000U);
         return GSM_ERR_HTTP_FAIL;
     }
-    HAL_Delay(500);  /* Let full response arrive */
+    Debug_Print("[QEC] Data available\r\n");
+    HAL_Delay(500);
+    AT_RxFlush();  /* Discard the URC line remnants */
 
     /* Read headers using AT+QIRD */
     uint32_t content_length = expected_size;
@@ -578,28 +580,30 @@ redirect_retry:
     const char *close_cmd = ssl ? "AT+QSSLCLOSE=0" : "AT+QICLOSE=0";
     const char *read_cmd = ssl ? "AT+QSSLRECV=0,512" : "AT+QIRD=0,512";
 
-    /* Read data in chunks via AT+QIRD */
+    /* Read data in chunks via AT+QIRD / AT+QSSLRECV */
+    const char *resp_prefix = ssl ? "+QSSLRECV:" : "+QIRD:";
+    uint8_t prefix_len = ssl ? 10 : 6;
+
     while ((HAL_GetTick() - t) < 120000U) {
         AT_RxFlush();
         AT_Send(read_cmd);
-        /* Response: +QIRD: <len>\r\n<data>\r\nOK  or  +QIRD: 0 (no data) */
         HAL_Delay(100);
 
-        /* Parse +QIRD: <len> */
-        char rbuf[32] = {0};
+        /* Parse response: +QIRD: <len>\r\n<data> or +QSSLRECV: <len>\r\n<data> */
+        char rbuf[40] = {0};
         uint16_t ri = 0;
         uint32_t rt = HAL_GetTick();
-        while ((HAL_GetTick() - rt) < 3000U && ri < 31) {
+        while ((HAL_GetTick() - rt) < 3000U && ri < 39) {
             if (at_tail != at_head) {
                 rbuf[ri++] = (char)at_ring[at_tail];
                 at_tail = (at_tail + 1U) % AT_RX_SIZE;
-                if (strstr(rbuf, "\n") && strstr(rbuf, "+QIRD:")) break;
+                if (strstr(rbuf, resp_prefix) && strchr(rbuf, '\n')) break;
             }
             HAL_Delay(1);
         }
 
-        char *qird = strstr(rbuf, "+QIRD:");
-        uint16_t chunk_len = qird ? (uint16_t)atoi(qird + 6) : 0;
+        char *qird = strstr(rbuf, resp_prefix);
+        uint16_t chunk_len = qird ? (uint16_t)atoi(qird + prefix_len) : 0;
 
         if (chunk_len == 0) {
             /* No more data — check if connection closed */
