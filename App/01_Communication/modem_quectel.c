@@ -10,6 +10,7 @@
 
 #include "modem_hal.h"
 #include "modem_at.h"
+#include "w25q_spi.h"
 #include "debug_cli.h"
 #include <string.h>
 #include <stdio.h>
@@ -314,29 +315,50 @@ static int quectel_sm_mqtt_open_poll(uint32_t deadline)
    HTTP (AT+QHTTP*)
    ════════════════════════════════════════════════════════════════════ */
 
-/* Shared HTTP header buffer (used by both http_get and http_get_range) */
-static char s_hdr[192];
+/* ── HTTP helpers ─────────────────────────────────────────────────── */
 
-/* Send URL via prompt: AT+QHTTPURL=<len>,80 → CONNECT → send URL → OK */
+/* Set URL for HTTP request. Configures SSL if HTTPS. */
 static bool q_set_url(const char *url)
 {
-    char cmd[48];
-    snprintf(cmd, AT_WORK_BUF_SIZE, "AT+QHTTPURL=%u,80", (unsigned)strlen(url));
+    char *cmd = at_work;
+    bool use_ssl = (strncmp(url, "https://", 8) == 0);
+
+    /* Configure SSL */
+    if (use_ssl) {
+        AT_Cmd("AT+QHTTPCFG=\"sslctxid\",1", "OK", 2000U);
+        AT_Cmd("AT+QSSLCFG=\"seclevel\",1,0", "OK", 2000U);
+    } else {
+        AT_Cmd("AT+QHTTPCFG=\"sslctxid\",0", "OK", 2000U);
+    }
+
+    uint16_t url_len = (uint16_t)strlen(url);
+    snprintf(cmd, AT_WORK_BUF_SIZE, "AT+QHTTPURL=%u,80", url_len);
     AT_RxFlush();
     AT_Send(cmd);
-    if (!AT_Wait("CONNECT", 5000U)) return false;
+    if (!AT_Wait("CONNECT", 5000U)) {
+        Debug_Print("[QEC] URL no CONNECT\r\n");
+        return false;
+    }
     HAL_Delay(50);
-    AT_RawTx((const uint8_t *)url, (uint16_t)strlen(url));
-    return AT_Wait("OK", 5000U);
+    AT_RawTx((const uint8_t *)url, url_len);
+    if (!AT_Wait("OK", 5000U)) {
+        Debug_Print("[QEC] URL not accepted\r\n");
+        return false;
+    }
+    Debug_Printf("[QEC] URL set (%u)\r\n", url_len);
+    return true;
 }
 
-/* Parse +QHTTPGET: <err>,<status>,<datalen> (async URC) */
+/* Parse +QHTTPGET: <err>,<status>,<datalen> (async URC) — waits up to 90s */
 static uint32_t q_parse_httpget(void)
 {
     char buf[128] = {0};
     uint16_t idx = 0;
     uint32_t t = HAL_GetTick();
-    while ((HAL_GetTick() - t) < 60000U) {
+    uint32_t last_log = 0;
+
+    Debug_Print("[QEC] Waiting +QHTTPGET...\r\n");
+    while ((HAL_GetTick() - t) < 90000U) {
         while (at_tail != at_head && idx < 127) {
             buf[idx++] = (char)at_ring[at_tail];
             at_tail = (at_tail + 1U) % AT_RX_SIZE;
@@ -344,13 +366,21 @@ static uint32_t q_parse_httpget(void)
             if (p) {
                 int err = 0, status = 0; uint32_t len = 0;
                 sscanf(p, "+QHTTPGET: %d,%d,%lu", &err, &status, &len);
-                Debug_Printf("[QEC] QHTTPGET err=%d status=%d len=%lu\r\n",
-                             err, status, len);
+                Debug_Printf("[QEC] HTTPGET err=%d st=%d len=%lu\r\n", err, status, len);
                 return (err == 0 && (status == 200 || status == 206)) ? len : 0;
             }
+            if (strstr(buf, "ERROR")) {
+                Debug_Printf("[QEC] HTTPGET ERROR: %s\r\n", buf);
+                return 0;
+            }
+        }
+        if ((HAL_GetTick() - t) / 10000U > last_log) {
+            last_log = (HAL_GetTick() - t) / 10000U;
+            Debug_Printf("[QEC] ...%lus (rx=%u)\r\n", (HAL_GetTick()-t)/1000U, idx);
         }
         HAL_Delay(5U);
     }
+    Debug_Printf("[QEC] HTTPGET timeout buf: %.60s\r\n", buf);
     return 0;
 }
 
@@ -359,7 +389,7 @@ static uint16_t q_read_body(uint8_t *out, uint16_t max_len)
 {
     AT_RxFlush();
     AT_Send("AT+QHTTPREAD=80");
-    if (!AT_Wait("CONNECT", 5000U)) return 0;
+    if (!AT_Wait("CONNECT", 10000U)) return 0;
 
     uint16_t i = 0;
     uint32_t t = HAL_GetTick();
@@ -368,118 +398,107 @@ static uint16_t q_read_body(uint8_t *out, uint16_t max_len)
             out[i++] = at_ring[at_tail];
             at_tail = (at_tail + 1U) % AT_RX_SIZE;
         }
+        if (i >= max_len) break;
         HAL_Delay(2U);
     }
-    /* Drain trailing +QHTTPREAD: 0\r\nOK */
     AT_Wait("+QHTTPREAD:", 5000U);
     return i;
 }
 
+/* Simple HTTP GET — no custom headers, module handles SSL */
 static GsmResult_t quectel_http_get(const char *url, char *out_buf,
                                      uint16_t buf_len, uint16_t *out_len)
 {
-    char *hdr = s_hdr;
-    char *cmd = at_work;
     *out_len = 0;
+    if (!q_set_url(url)) return GSM_ERR_HTTP_FAIL;
 
-    /* Use requestheader mode to add User-Agent (required for ngrok) */
-    AT_Cmd("AT+QHTTPCFG=\"requestheader\",1", "OK", 2000U);
-
-    if (!q_set_url(url)) {
-        Debug_Print("[QEC] QHTTPURL fail\r\n");
-        AT_Cmd("AT+QHTTPCFG=\"requestheader\",0", "OK", 2000U);
-        return GSM_ERR_HTTP_FAIL;
-    }
-
-    /* Build HTTP GET with User-Agent */
-    const char *host = url;
-    if (strncmp(host, "http://", 7) == 0) host += 7;
-    else if (strncmp(host, "https://", 8) == 0) host += 8;
-    const char *path = strchr(host, '/');
-    uint8_t hlen = path ? (uint8_t)(path - host) : (uint8_t)strlen(host);
-    if (!path) path = "/";
-
-    int hdr_len = snprintf(hdr, sizeof(s_hdr),
-        "GET %s HTTP/1.1\r\n"
-        "Host: %.*s\r\n"
-        "User-Agent: STM32-OTA/1.0\r\n"
-        "ngrok-skip-browser-warning: 1\r\n"
-        "\r\n",
-        path, hlen, host);
-
-    snprintf(cmd, AT_WORK_BUF_SIZE, "AT+QHTTPGET=80,%d", hdr_len);
     AT_RxFlush();
-    AT_Send(cmd);
-    if (!AT_Wait("CONNECT", 5000U)) {
-        AT_Cmd("AT+QHTTPCFG=\"requestheader\",0", "OK", 2000U);
-        return GSM_ERR_HTTP_FAIL;
-    }
-    HAL_Delay(50);
-    AT_RawTx((const uint8_t *)hdr, (uint16_t)hdr_len);
+    AT_Send("AT+QHTTPGET=60");
 
     uint32_t dlen = q_parse_httpget();
-    AT_Cmd("AT+QHTTPCFG=\"requestheader\",0", "OK", 2000U);
     if (!dlen) return GSM_ERR_HTTP_FAIL;
 
     uint16_t rlen = (dlen < (uint32_t)(buf_len - 1U)) ? (uint16_t)dlen : (buf_len - 1U);
     *out_len = q_read_body((uint8_t *)out_buf, rlen);
     out_buf[*out_len] = '\0';
-    Debug_Printf("[QEC] HTTP GET done: %u bytes\r\n", *out_len);
+    Debug_Printf("[QEC] GET done: %u bytes\r\n", *out_len);
     return GSM_OK;
 }
 
+/* Streaming OTA: download full file, then stream to SPI flash via QHTTPREAD */
+static GsmResult_t quectel_http_download_to_flash(
+    const char *url, uint32_t flash_addr, uint32_t expected_size,
+    uint32_t *out_written, OtaProgressCb_t progress_cb)
+{
+    *out_written = 0;
+    if (!q_set_url(url)) return GSM_ERR_HTTP_FAIL;
+
+    /* Download full file — module buffers internally */
+    AT_RxFlush();
+    AT_Send("AT+QHTTPGET=90");
+    uint32_t file_len = q_parse_httpget();
+    if (!file_len) return GSM_ERR_HTTP_FAIL;
+
+    Debug_Printf("[QEC] File ready: %lu bytes\r\n", file_len);
+
+    /* Stream via QHTTPREAD → ring buffer → SPI flash */
+    AT_RxFlush();
+    AT_Send("AT+QHTTPREAD=60");
+    if (!AT_Wait("CONNECT", 15000U)) {
+        Debug_Print("[QEC] HTTPREAD no CONNECT\r\n");
+        return GSM_ERR_HTTP_FAIL;
+    }
+
+    uint8_t page[256];
+    uint16_t pi = 0;
+    uint32_t written = 0;
+    uint32_t t = HAL_GetTick();
+
+    while (written < file_len && (HAL_GetTick() - t) < 120000U) {
+        while (at_tail != at_head) {
+            page[pi++] = at_ring[at_tail];
+            at_tail = (at_tail + 1U) % AT_RX_SIZE;
+
+            if (pi >= 256U) {
+                /* Check if we'd write past file end */
+                if (written + pi > file_len) {
+                    pi = (uint16_t)(file_len - written);
+                }
+                W25Q_Write(flash_addr + written, page, pi);
+                written += pi;
+                pi = 0;
+                t = HAL_GetTick();  /* reset timeout */
+
+                if (progress_cb && (written % 4096U) < 256U)
+                    progress_cb(written, file_len);
+
+                if (written >= file_len) break;
+            }
+        }
+        HAL_Delay(1U);
+    }
+    /* Flush remaining */
+    if (pi > 0 && written < file_len) {
+        uint16_t remain = (file_len - written < pi) ? (uint16_t)(file_len - written) : pi;
+        W25Q_Write(flash_addr + written, page, remain);
+        written += remain;
+    }
+
+    AT_Wait("+QHTTPREAD:", 5000U);
+    *out_written = written;
+    if (progress_cb) progress_cb(written, file_len);
+    Debug_Printf("[QEC] Flash done: %lu/%lu\r\n", written, file_len);
+    return (written >= file_len) ? GSM_OK : GSM_ERR_HTTP_FAIL;
+}
+
+/* Legacy range — fallback (not used for OTA) */
 static GsmResult_t quectel_http_get_range(const char *url,
                                            uint32_t range_start, uint32_t range_end,
                                            uint8_t *out_buf, uint16_t *out_len)
 {
-    char *cmd = at_work;
-    *out_len = 0;
-    uint16_t want = (uint16_t)(range_end - range_start + 1U);
-
-    /* Enable custom request header so we can add Range */
-    AT_Cmd("AT+QHTTPCFG=\"requestheader\",1", "OK", 2000U);
-
-    if (!q_set_url(url)) {
-        AT_Cmd("AT+QHTTPCFG=\"requestheader\",0", "OK", 2000U);
-        return GSM_ERR_HTTP_FAIL;
-    }
-
-    /* Build raw HTTP GET with Range header */
-    char *hdr = s_hdr;
-    const char *host = url;
-    if (strncmp(host, "http://", 7) == 0) host += 7;
-    else if (strncmp(host, "https://", 8) == 0) host += 8;
-    const char *path = strchr(host, '/');
-    uint8_t hlen = path ? (uint8_t)(path - host) : (uint8_t)strlen(host);
-    if (!path) path = "/";
-
-    int hdr_len = snprintf(hdr, sizeof(s_hdr),
-        "GET %s HTTP/1.1\r\n"
-        "Host: %.*s\r\n"
-        "Range: bytes=%lu-%lu\r\n"
-        "User-Agent: STM32-OTA/1.0\r\n"
-        "ngrok-skip-browser-warning: 1\r\n"
-        "\r\n",
-        path, hlen, host, range_start, range_end);
-
-    snprintf(cmd, AT_WORK_BUF_SIZE, "AT+QHTTPGET=80,%d", hdr_len);
-    AT_RxFlush();
-    AT_Send(cmd);
-    if (!AT_Wait("CONNECT", 5000U)) {
-        AT_Cmd("AT+QHTTPCFG=\"requestheader\",0", "OK", 2000U);
-        return GSM_ERR_HTTP_FAIL;
-    }
-    HAL_Delay(50);
-    AT_RawTx((const uint8_t *)hdr, (uint16_t)hdr_len);
-
-    uint32_t dlen = q_parse_httpget();
-    /* Restore normal mode */
-    AT_Cmd("AT+QHTTPCFG=\"requestheader\",0", "OK", 2000U);
-    if (!dlen) return GSM_ERR_HTTP_FAIL;
-
-    if ((uint32_t)want > dlen) want = (uint16_t)dlen;
-    *out_len = q_read_body(out_buf, want);
-    return (*out_len == want) ? GSM_OK : GSM_ERR_HTTP_FAIL;
+    (void)range_start; (void)range_end;
+    return quectel_http_get(url, (char*)out_buf,
+                            (uint16_t)(range_end - range_start + 1U), out_len);
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -512,8 +531,9 @@ const ModemOps_t g_quectel_ops = {
     .sm_mqtt_open_poll     = quectel_sm_mqtt_open_poll,
 
     /* HTTP */
-    .http_get             = quectel_http_get,
-    .http_get_range       = quectel_http_get_range,
+    .http_get               = quectel_http_get,
+    .http_get_range         = quectel_http_get_range,
+    .http_download_to_flash = quectel_http_download_to_flash,
 
     /* Misc */
     .reboot_cmd           = "AT+CFUN=1,1",

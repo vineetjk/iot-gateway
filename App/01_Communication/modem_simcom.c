@@ -427,8 +427,9 @@ const ModemOps_t g_simcom_ops = {
     .sm_mqtt_open_poll     = simcom_sm_mqtt_open_poll,
 
     /* HTTP */
-    .http_get             = simcom_http_get,
-    .http_get_range       = simcom_http_get_range,
+    .http_get               = simcom_http_get,
+    .http_get_range         = simcom_http_get_range,
+    .http_download_to_flash = NULL,
 
     /* Misc */
     .reboot_cmd           = "AT+CRESET",

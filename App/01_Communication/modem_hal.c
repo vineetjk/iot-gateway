@@ -166,6 +166,17 @@ GsmResult_t Modem_HttpGetRange(const char *url,
     return s_ops->http_get_range(url, range_start, range_end, out_buf, out_len);
 }
 
+GsmResult_t Modem_HttpDownloadToFlash(const char *url, uint32_t flash_addr,
+                                       uint32_t expected_size,
+                                       uint32_t *out_written,
+                                       OtaProgressCb_t progress_cb)
+{
+    if (s_ops->http_download_to_flash)
+        return s_ops->http_download_to_flash(url, flash_addr, expected_size,
+                                             out_written, progress_cb);
+    return GSM_ERR_HTTP_FAIL;
+}
+
 /* ── ISR callback ────────────────────────────────────────────────── */
 
 void Modem_UART_RxCallback(UART_HandleTypeDef *huart)

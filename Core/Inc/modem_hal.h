@@ -28,6 +28,9 @@ typedef enum {
     GSM_ERR_HTTP_FAIL,
 } GsmResult_t;
 
+/* Progress callback for OTA streaming download */
+typedef void (*OtaProgressCb_t)(uint32_t done, uint32_t total);
+
 /* ── Modem operations vtable ─────────────────────────────────────── */
 typedef struct {
     /* ── Hardware ── */
@@ -67,6 +70,10 @@ typedef struct {
     GsmResult_t (*http_get_range)(const char *url,
                                   uint32_t range_start, uint32_t range_end,
                                   uint8_t *out_buf, uint16_t *out_len);
+    GsmResult_t (*http_download_to_flash)(const char *url, uint32_t flash_addr,
+                                          uint32_t expected_size,
+                                          uint32_t *out_written,
+                                          OtaProgressCb_t progress_cb);
 
     /* ── Misc ── */
     const char *reboot_cmd;
@@ -118,6 +125,10 @@ GsmResult_t Modem_HttpGet(const char *url, char *out_buf,
 GsmResult_t Modem_HttpGetRange(const char *url,
                                 uint32_t range_start, uint32_t range_end,
                                 uint8_t *out_buf, uint16_t *out_len);
+GsmResult_t Modem_HttpDownloadToFlash(const char *url, uint32_t flash_addr,
+                                       uint32_t expected_size,
+                                       uint32_t *out_written,
+                                       OtaProgressCb_t progress_cb);
 
 /* ISR callback */
 void Modem_UART_RxCallback(UART_HandleTypeDef *huart);

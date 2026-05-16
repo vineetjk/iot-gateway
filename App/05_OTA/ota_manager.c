@@ -190,6 +190,13 @@ OtaResult_t OTA_CheckAndUpdate(void)
     return OTA_RESULT_UPDATED;
 }
 
+/* Progress callback */
+static void ota_progress(uint32_t done, uint32_t total)
+{
+    Debug_Printf("[OTA] %lu/%lu\r\n", done, total);
+    Display_ShowUpdating(done, total);
+}
+
 /* ── Core MQTT-triggered OTA (shared by JSON and CSV entry points) ── */
 static OtaResult_t ota_download(const char *fw_url, uint32_t fw_size,
                                  uint32_t fw_crc, uint32_t ver)
@@ -207,33 +214,34 @@ static OtaResult_t ota_download(const char *fw_url, uint32_t fw_size,
     Debug_Printf("[OTA] URL: %s\r\n", fw_url);
     Display_ShowUpdating(0, fw_size);
 
-    /* Disconnect MQTT before HTTP download to avoid resource conflict
-     * on the modem (MQTT+HTTP simultaneous can cause module reboot) */
+    /* Disconnect MQTT before HTTP download */
     Modem_MqttDisconnect();
     Modem_MqttSetUp(false);
     HAL_Delay(500U);
 
+    /* Erase flash */
     W25Q_EraseRange(SPI_FLASH_SLOT_A_ADDR, fw_size);
 
-    __attribute__((aligned(4))) static uint8_t chunk[256];
-    uint32_t done = 0, crc_run = 0xFFFFFFFFUL;
+    /* Stream download directly to SPI flash */
+    uint32_t written = 0;
+    GsmResult_t r = Modem_HttpDownloadToFlash(fw_url, SPI_FLASH_SLOT_A_ADDR,
+                                              fw_size, &written, ota_progress);
+    if (r != GSM_OK || written < fw_size) {
+        Debug_Printf("[OTA] Download fail: %lu/%lu\r\n", written, fw_size);
+        Display_ShowError(ERR_OTA_DOWNLOAD);
+        return OTA_RESULT_DOWNLOAD_FAIL;
+    }
 
-    while (done < fw_size) {
-        uint32_t csz = ((fw_size - done) > sizeof(chunk)) ? sizeof(chunk) : (fw_size - done);
-        uint16_t got = 0;
-        if (Modem_HttpGetRange(fw_url, done, done + csz - 1U, chunk, &got) != GSM_OK) {
-            Debug_Printf("[OTA] Download fail at %lu\r\n", done);
-            Display_ShowError(ERR_OTA_DOWNLOAD);
-            return OTA_RESULT_DOWNLOAD_FAIL;
-        }
-        W25Q_Write(SPI_FLASH_SLOT_A_ADDR + done, chunk, got);
-        const uint8_t *p = chunk; uint32_t n = got;
+    /* CRC verify by reading back from flash */
+    uint32_t crc_run = 0xFFFFFFFFUL;
+    static uint8_t vbuf[256];
+    uint32_t voff = 0;
+    while (voff < fw_size) {
+        uint16_t vlen = ((fw_size - voff) > 256U) ? 256U : (uint16_t)(fw_size - voff);
+        W25Q_Read(SPI_FLASH_SLOT_A_ADDR + voff, vbuf, vlen);
+        const uint8_t *p = vbuf; uint32_t n = vlen;
         while (n--) { crc_run ^= *p++; for (uint8_t b = 0; b < 8; b++) crc_run = (crc_run & 1) ? ((crc_run >> 1) ^ 0xEDB88320UL) : (crc_run >> 1); }
-        done += got;
-        if (done % 8192 == 0 || done == fw_size) {
-            Debug_Printf("[OTA] %lu/%lu bytes\r\n", done, fw_size);
-            Display_ShowUpdating(done, fw_size);
-        }
+        voff += vlen;
     }
     crc_run ^= 0xFFFFFFFFUL;
 
