@@ -435,83 +435,199 @@ static GsmResult_t quectel_http_get(const char *url, char *out_buf,
     return GSM_OK;
 }
 
-/* Streaming OTA: download full file, then stream to SPI flash via QHTTPREAD */
+/* ── Raw TCP/SSL socket OTA download ──────────────────────────────────
+ * Bypasses AT+QHTTP* (which can't do HTTPS to GitHub/CDNs).
+ * Opens a raw TCP or SSL socket, sends HTTP/1.1 GET manually,
+ * parses Content-Length from response headers, streams body to flash. */
+
+/* Parse URL into host, port, path, ssl flag */
+static bool q_parse_url(const char *url, char *host, uint16_t host_sz,
+                         uint16_t *port, const char **path, bool *ssl)
+{
+    *ssl = false; *port = 80;
+    if (strncmp(url, "https://", 8) == 0) { url += 8; *ssl = true; *port = 443; }
+    else if (strncmp(url, "http://", 7) == 0) { url += 7; }
+
+    const char *slash = strchr(url, '/');
+    const char *colon = strchr(url, ':');
+    uint16_t hlen;
+
+    if (colon && (!slash || colon < slash)) {
+        hlen = (uint16_t)(colon - url);
+        *port = (uint16_t)atoi(colon + 1);
+    } else {
+        hlen = slash ? (uint16_t)(slash - url) : (uint16_t)strlen(url);
+    }
+    if (hlen >= host_sz) hlen = host_sz - 1;
+    memcpy(host, url, hlen); host[hlen] = '\0';
+    *path = slash ? slash : "/";
+    return (hlen > 0);
+}
+
 static GsmResult_t quectel_http_download_to_flash(
     const char *url, uint32_t flash_addr, uint32_t expected_size,
     uint32_t *out_written, OtaProgressCb_t progress_cb)
 {
+    char *cmd = at_work;
+    char host[64];
+    uint16_t port;
+    const char *path;
+    bool ssl;
     *out_written = 0;
-    if (!q_set_url(url)) return GSM_ERR_HTTP_FAIL;
 
-    /* Download full file — module buffers internally */
+    if (!q_parse_url(url, host, sizeof(host), &port, &path, &ssl)) {
+        Debug_Print("[QEC] Bad URL\r\n");
+        return GSM_ERR_HTTP_FAIL;
+    }
+    Debug_Printf("[QEC] Host=%s Port=%u SSL=%d\r\n", host, port, ssl);
+    Debug_Printf("[QEC] Path=%s\r\n", path);
+
+    /* Close any previous socket */
+    AT_Cmd("AT+QICLOSE=0", "OK", 5000U);
+    HAL_Delay(500);
+
+    /* Configure SSL if needed */
+    if (ssl) {
+        AT_Cmd("AT+QSSLCFG=\"sslversion\",0,4", "OK", 2000U);
+        AT_Cmd("AT+QSSLCFG=\"ciphersuite\",0,0xFFFF", "OK", 2000U);
+        AT_Cmd("AT+QSSLCFG=\"seclevel\",0,0", "OK", 2000U);
+        AT_Cmd("AT+QSSLCFG=\"sni\",0,1", "OK", 2000U);
+        /* Open SSL socket */
+        snprintf(cmd, AT_WORK_BUF_SIZE,
+                 "AT+QSSLOPEN=1,0,0,\"%s\",%u,0", host, port);
+    } else {
+        /* Open plain TCP socket */
+        snprintf(cmd, AT_WORK_BUF_SIZE,
+                 "AT+QIOPEN=1,0,\"TCP\",\"%s\",%u,0,1", host, port);
+    }
+
     AT_RxFlush();
-    AT_Send("AT+QHTTPGET=90");
-    uint32_t file_len = q_parse_httpget();
-    if (!file_len) {
-        /* Query last error for diagnostics */
-        AT_RxFlush();
-        AT_Send("AT+QIGETERROR");
-        HAL_Delay(500);
-        char ebuf[80] = {0};
-        uint16_t ei = 0;
+    AT_Send(cmd);
+
+    /* Wait for connection: +QIOPEN: 0,0 or +QSSLOPEN: 0,0 */
+    const char *expect = ssl ? "+QSSLOPEN: 0,0" : "+QIOPEN: 0,0";
+    if (!AT_Wait(expect, 30000U)) {
+        Debug_Print("[QEC] Socket open failed\r\n");
+        /* Print what we got */
+        char ebuf[80] = {0}; uint16_t ei = 0;
         while (at_tail != at_head && ei < 79) {
             ebuf[ei++] = (char)at_ring[at_tail];
             at_tail = (at_tail + 1U) % AT_RX_SIZE;
         }
-        Debug_Printf("[QEC] QIGETERROR: %s\r\n", ebuf);
+        Debug_Printf("[QEC] Got: %s\r\n", ebuf);
         return GSM_ERR_HTTP_FAIL;
     }
+    Debug_Print("[QEC] Socket connected\r\n");
 
-    Debug_Printf("[QEC] File ready: %lu bytes\r\n", file_len);
+    /* Send HTTP GET request */
+    int req_len = snprintf(cmd, AT_WORK_BUF_SIZE,
+        "GET %s HTTP/1.1\r\n"
+        "Host: %s\r\n"
+        "Connection: close\r\n"
+        "User-Agent: STM32-OTA/1.0\r\n"
+        "\r\n", path, host);
 
-    /* Stream via QHTTPREAD → ring buffer → SPI flash */
-    AT_RxFlush();
-    AT_Send("AT+QHTTPREAD=60");
-    if (!AT_Wait("CONNECT", 15000U)) {
-        Debug_Print("[QEC] HTTPREAD no CONNECT\r\n");
-        return GSM_ERR_HTTP_FAIL;
+    /* AT+QISEND=0,<len> or AT+QSSLSEND=0,<len> */
+    {
+        char scmd[32];
+        snprintf(scmd, sizeof(scmd), ssl ? "AT+QSSLSEND=0,%d" : "AT+QISEND=0,%d", req_len);
+        AT_RxFlush();
+        AT_Send(scmd);
+        if (!AT_Wait(">", 5000U)) {
+            Debug_Print("[QEC] No send prompt\r\n");
+            AT_Cmd(ssl ? "AT+QSSLCLOSE=0" : "AT+QICLOSE=0", "OK", 5000U);
+            return GSM_ERR_HTTP_FAIL;
+        }
+        AT_RawTx((const uint8_t *)cmd, (uint16_t)req_len);
+        if (!AT_Wait("SEND OK", 10000U)) {
+            Debug_Print("[QEC] Send failed\r\n");
+            AT_Cmd(ssl ? "AT+QSSLCLOSE=0" : "AT+QICLOSE=0", "OK", 5000U);
+            return GSM_ERR_HTTP_FAIL;
+        }
     }
+    Debug_Print("[QEC] GET sent, waiting response...\r\n");
 
+    /* Read HTTP response headers + body directly from ring buffer.
+     * Headers end with \r\n\r\n, then body follows. */
+    uint32_t content_length = expected_size;  /* fallback */
     uint8_t page[256];
     uint16_t pi = 0;
     uint32_t written = 0;
     uint32_t t = HAL_GetTick();
+    bool in_body = false;
+    char hdr_buf[384] = {0};
+    uint16_t hi = 0;
+    bool got_length = false;
 
-    while (written < file_len && (HAL_GetTick() - t) < 120000U) {
+    while ((HAL_GetTick() - t) < 120000U) {
         while (at_tail != at_head) {
-            page[pi++] = at_ring[at_tail];
+            uint8_t byte = at_ring[at_tail];
             at_tail = (at_tail + 1U) % AT_RX_SIZE;
 
-            if (pi >= 256U) {
-                /* Check if we'd write past file end */
-                if (written + pi > file_len) {
-                    pi = (uint16_t)(file_len - written);
+            if (!in_body) {
+                /* Accumulate headers */
+                if (hi < sizeof(hdr_buf) - 1) hdr_buf[hi++] = (char)byte;
+                /* Check for end of headers */
+                if (hi >= 4 && strstr(hdr_buf + (hi > 20 ? hi - 20 : 0), "\r\n\r\n")) {
+                    in_body = true;
+                    /* Parse Content-Length */
+                    char *cl = strstr(hdr_buf, "Content-Length:");
+                    if (!cl) cl = strstr(hdr_buf, "content-length:");
+                    if (cl) {
+                        content_length = (uint32_t)atol(cl + 15);
+                        got_length = true;
+                    }
+                    /* Check HTTP status */
+                    char *sp = strchr(hdr_buf, ' ');
+                    int status = sp ? atoi(sp + 1) : 0;
+                    Debug_Printf("[QEC] HTTP %d, len=%lu\r\n", status, content_length);
+                    if (status != 200) {
+                        Debug_Printf("[QEC] Bad status: %d\r\n", status);
+                        AT_Cmd(ssl ? "AT+QSSLCLOSE=0" : "AT+QICLOSE=0", "OK", 5000U);
+                        return GSM_ERR_HTTP_FAIL;
+                    }
                 }
-                W25Q_Write(flash_addr + written, page, pi);
-                written += pi;
-                pi = 0;
-                t = HAL_GetTick();  /* reset timeout */
+            } else {
+                /* Body: write to flash in 256-byte pages */
+                page[pi++] = byte;
+                if (pi >= 256U) {
+                    W25Q_Write(flash_addr + written, page, pi);
+                    written += pi;
+                    pi = 0;
+                    t = HAL_GetTick();
 
-                if (progress_cb && (written % 4096U) < 256U)
-                    progress_cb(written, file_len);
+                    if (progress_cb && (written % 4096U) < 256U)
+                        progress_cb(written, content_length);
 
-                if (written >= file_len) break;
+                    if (got_length && written >= content_length) break;
+                }
             }
         }
+
+        if (in_body && got_length && written >= content_length) break;
+
+        /* Check for socket closed (server sent all data with Connection: close) */
+        if (in_body && !got_length) {
+            /* No Content-Length: rely on socket close */
+        }
+
         HAL_Delay(1U);
     }
-    /* Flush remaining */
-    if (pi > 0 && written < file_len) {
-        uint16_t remain = (file_len - written < pi) ? (uint16_t)(file_len - written) : pi;
-        W25Q_Write(flash_addr + written, page, remain);
-        written += remain;
+
+    /* Flush remaining partial page */
+    if (pi > 0 && (!got_length || written < content_length)) {
+        W25Q_Write(flash_addr + written, page, pi);
+        written += pi;
     }
 
-    AT_Wait("+QHTTPREAD:", 5000U);
+    /* Close socket */
+    AT_Cmd(ssl ? "AT+QSSLCLOSE=0" : "AT+QICLOSE=0", "OK", 5000U);
+
     *out_written = written;
-    if (progress_cb) progress_cb(written, file_len);
-    Debug_Printf("[QEC] Flash done: %lu/%lu\r\n", written, file_len);
-    return (written >= file_len) ? GSM_OK : GSM_ERR_HTTP_FAIL;
+    if (progress_cb) progress_cb(written, got_length ? content_length : written);
+    Debug_Printf("[QEC] Download done: %lu bytes\r\n", written);
+    return (written > 0 && (!got_length || written >= content_length))
+           ? GSM_OK : GSM_ERR_HTTP_FAIL;
 }
 
 /* Legacy range — fallback (not used for OTA) */
