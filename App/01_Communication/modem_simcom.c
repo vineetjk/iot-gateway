@@ -5,6 +5,9 @@
  * AT+CMQTT* for MQTT, AT+HTTP* for HTTP.
  * =========================================================================
  */
+#include "modem_config.h"
+#if MODEM_DRIVER == MODEM_DRV_SIMCOM
+
 #include "modem_hal.h"
 #include "modem_at.h"
 #include "debug_cli.h"
@@ -430,3 +433,5 @@ const ModemOps_t g_simcom_ops = {
     /* Misc */
     .reboot_cmd           = "AT+CRESET",
 };
+
+#endif /* MODEM_DRIVER == MODEM_DRV_SIMCOM */

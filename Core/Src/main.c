@@ -273,7 +273,6 @@ int main(void)
     /* ── 6. GSM — kick non-blocking state machine ── */
     Debug_Print("[APP] Starting GSM state machine...\r\n");
     Modem_Init(&huart2, GPIOB, GPIO_PIN_4);
-    Modem_SelectDriver(cfg->modem_type);
     GSM_SM_Kick();
     sysState = STATE_NO_NETWORK;
     Display_BootMsg("GSM", true);

@@ -72,14 +72,22 @@ typedef struct {
     const char *reboot_cmd;
 } ModemOps_t;
 
-/* ── Driver instances (defined in modem_simcom.c / modem_quectel.c) ─ */
-extern const ModemOps_t g_simcom_ops;
+/* ── Compile-time modem selection ─────────────────────────────────── */
+#include "modem_config.h"
+
+#if MODEM_DRIVER == MODEM_DRV_QUECTEL
 extern const ModemOps_t g_quectel_ops;
+#define MODEM_OPS  (&g_quectel_ops)
+#elif MODEM_DRIVER == MODEM_DRV_SIMCOM
+extern const ModemOps_t g_simcom_ops;
+#define MODEM_OPS  (&g_simcom_ops)
+#else
+#error "MODEM_DRIVER not set — edit modem_config.h"
+#endif
 
 /* ── Unified public API ──────────────────────────────────────────── */
 void        Modem_Init(UART_HandleTypeDef *huart,
                        GPIO_TypeDef *rst_port, uint16_t rst_pin);
-void        Modem_SelectDriver(uint8_t modem_type);
 const ModemOps_t *Modem_GetOps(void);
 
 /* Hardware */

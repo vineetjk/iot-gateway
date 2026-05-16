@@ -5,6 +5,9 @@
  * AT+QMT* for MQTT, AT+QHTTP* for HTTP.
  * =========================================================================
  */
+#include "modem_config.h"
+#if MODEM_DRIVER == MODEM_DRV_QUECTEL
+
 #include "modem_hal.h"
 #include "modem_at.h"
 #include "debug_cli.h"
@@ -515,3 +518,5 @@ const ModemOps_t g_quectel_ops = {
     /* Misc */
     .reboot_cmd           = "AT+CFUN=1,1",
 };
+
+#endif /* MODEM_DRIVER == MODEM_DRV_QUECTEL */

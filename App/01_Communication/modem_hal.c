@@ -13,12 +13,12 @@
 #include <stdio.h>
 
 /* ── State ───────────────────────────────────────────────────────── */
-static const ModemOps_t *s_ops = NULL;
+static const ModemOps_t *s_ops = MODEM_OPS;
 static GPIO_TypeDef     *s_rst_port;
 static uint16_t          s_rst_pin;
 static bool              s_mqtt_up = false;
 
-/* ── Init / driver select ────────────────────────────────────────── */
+/* ── Init ─────────────────────────────────────────────────────────── */
 
 void Modem_Init(UART_HandleTypeDef *huart,
                 GPIO_TypeDef *rst_port, uint16_t rst_pin)
@@ -26,16 +26,11 @@ void Modem_Init(UART_HandleTypeDef *huart,
     s_rst_port = rst_port;
     s_rst_pin  = rst_pin;
     AT_Init(huart);
-}
-
-void Modem_SelectDriver(uint8_t modem_type)
-{
-    switch (modem_type) {
-        case MODEM_QUECTEL_EC200U: s_ops = &g_quectel_ops; break;
-        default:                   s_ops = &g_simcom_ops;   break;
-    }
-    Debug_Printf("[MODEM] Driver: %s\r\n",
-                 modem_type == MODEM_QUECTEL_EC200U ? "Quectel EC200U" : "SIMCom A7670C");
+#if MODEM_DRIVER == MODEM_DRV_QUECTEL
+    Debug_Print("[MODEM] Driver: Quectel EC200U\r\n");
+#else
+    Debug_Print("[MODEM] Driver: SIMCom A7670C\r\n");
+#endif
 }
 
 const ModemOps_t *Modem_GetOps(void) { return s_ops; }
