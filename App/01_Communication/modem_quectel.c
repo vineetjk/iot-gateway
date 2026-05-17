@@ -689,10 +689,54 @@ redirect_retry:
                     }
                 }
             } else {
-                /* Body byte → flash page */
-                if (!got_length || written + pi < content_length) {
-                    page[pi++] = byte;
+                /* Body byte → page buffer, with URC detection.
+                 * URC pattern: \r\n+QSSLURC... (4 bytes: 0D 0A 2B 51)
+                 * We buffer 2 bytes behind (delay writing \r\n until we
+                 * confirm they're not a URC prefix). */
+                static uint8_t hold[2];
+                static uint8_t hold_n;
+                /* On first body byte, init */
+                if (written == 0 && pi == 0) hold_n = 0;
+
+                if (hold_n == 2 && byte == '+') {
+                    /* Possible URC: we're holding \r\n and got + */
+                    /* Peek next byte */
+                    uint32_t pk = HAL_GetTick();
+                    while (at_tail == at_head && (HAL_GetTick()-pk) < 500U) HAL_Delay(1);
+                    if (at_tail != at_head && at_ring[at_tail] == 'Q') {
+                        /* Confirmed URC: \r\n+Q — skip rest of line */
+                        uint32_t sk = HAL_GetTick();
+                        while ((HAL_GetTick() - sk) < 3000U) {
+                            if (at_tail != at_head) {
+                                uint8_t sb = at_ring[at_tail];
+                                at_tail = (at_tail + 1U) % AT_RX_SIZE;
+                                if (sb == '\n') break;
+                            } else { HAL_Delay(1); }
+                        }
+                        hold_n = 0;  /* Discard the held \r\n */
+                        continue;
+                    }
+                    /* Not URC: flush held bytes + current */
+                    if (!got_length || written + pi < content_length) page[pi++] = hold[0];
+                    if (!got_length || written + pi < content_length) page[pi++] = hold[1];
+                    hold_n = 0;
+                    if (!got_length || written + pi < content_length) page[pi++] = byte;
+                } else if (byte == '\r' && hold_n == 0) {
+                    hold[0] = byte; hold_n = 1;
+                } else if (byte == '\n' && hold_n == 1) {
+                    hold[1] = byte; hold_n = 2;
+                } else {
+                    /* Flush any held bytes */
+                    if (hold_n >= 1) {
+                        if (!got_length || written + pi < content_length) page[pi++] = hold[0];
+                    }
+                    if (hold_n >= 2) {
+                        if (!got_length || written + pi < content_length) page[pi++] = hold[1];
+                    }
+                    hold_n = 0;
+                    if (!got_length || written + pi < content_length) page[pi++] = byte;
                 }
+
                 if (pi >= 256U || (got_length && written + pi >= content_length)) {
                     uint16_t to_write = pi;
                     if (got_length && written + to_write > content_length)
