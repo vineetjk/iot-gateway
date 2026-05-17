@@ -613,11 +613,31 @@ redirect_retry:
     t = HAL_GetTick();
     uint32_t idle_since = HAL_GetTick();
     uint8_t hdr_end[4] = {0};  /* sliding window for \r\n\r\n */
+    bool was_empty = false;     /* Track buffer empty state for URC skipping */
     while ((HAL_GetTick() - t) < 120000U) {
         if (at_tail != at_head) {
             uint8_t byte = at_ring[at_tail];
             at_tail = (at_tail + 1U) % AT_RX_SIZE;
-            idle_since = HAL_GetTick();  /* Reset idle timer */
+            idle_since = HAL_GetTick();
+
+            /* Skip URC lines between push segments in body mode.
+             * After buffer was empty, next bytes are: \r\n+QSSLURC: "recv",0,<len>\r\n */
+            if (in_body && was_empty) {
+                was_empty = false;
+                if (byte == '\r' || byte == '\n' || byte == '+') {
+                    /* Skip until end of URC line (\n) */
+                    uint32_t sk = HAL_GetTick();
+                    while ((HAL_GetTick() - sk) < 2000U) {
+                        if (at_tail != at_head) {
+                            uint8_t sb = at_ring[at_tail];
+                            at_tail = (at_tail + 1U) % AT_RX_SIZE;
+                            if (sb == '\n') break;
+                        } else { HAL_Delay(1); }
+                    }
+                    continue;  /* Don't process this byte as body */
+                }
+            }
+            was_empty = false;
 
             if (!in_body) {
                 /* Store in buffer (for parsing), track total count separately */
@@ -685,7 +705,9 @@ redirect_retry:
                 }
             }
         } else {
-            /* Buffer empty — if idle too long, connection might be closed */
+            /* Buffer empty — mark for URC skip on next data arrival */
+            if (in_body) was_empty = true;
+            /* If idle too long, connection closed */
             if ((HAL_GetTick() - idle_since) > 15000U) {
                 Debug_Printf("[QEC] Idle timeout hi=%u wr=%lu\r\n", hi, written);
                 break;
