@@ -15,6 +15,7 @@
 #define DEBUG_CLI_H
 
 #include "stm32f1xx_hal.h"
+#include "build_config.h"
 
 #define CLI_RX_BUF_SIZE  256U
 #define CLI_CMD_BUF_SIZE 128U
@@ -22,10 +23,17 @@
 void CLI_Init(UART_HandleTypeDef *huart);
 void CLI_Process(void);
 void CLI_RxCallback(UART_HandleTypeDef *huart);
-void Debug_Print(const char *msg);
-void Debug_Printf(const char *fmt, ...);
 
 /* Log control — logs OFF by default, enable with "log on" CLI command */
 extern volatile uint8_t g_log_enabled;
+
+#if DEBUG_LOG_ENABLED
+  void Debug_Print(const char *msg);
+  void Debug_Printf(const char *fmt, ...);
+#else
+  /* Strip all debug prints in production — saves ~13KB flash (format strings) */
+  #define Debug_Print(msg)       ((void)0)
+  #define Debug_Printf(fmt, ...) ((void)0)
+#endif
 
 #endif /* DEBUG_CLI_H */
