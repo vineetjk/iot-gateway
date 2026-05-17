@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GATEWAY Project Documentation</title>
+<style>
+/* ── Base styles ─────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.5;
+    color: #000;
+    background: #fff;
+    margin: 0;
+    padding: 20mm;
+}
+h1 { font-size: 24pt; margin-top: 0; }
+h2 { font-size: 16pt; margin-top: 1.5em; border-bottom: 2px solid #333; padding-bottom: 4px; }
+h3 { font-size: 13pt; margin-top: 1.2em; }
+h4 { font-size: 11pt; margin-top: 1em; font-weight: 600; }
+p, li { margin-bottom: 0.4em; }
+code {
+    font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+    font-size: 9.5pt;
+    background: #f4f4f4;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+pre {
+    background: #f4f4f4;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px 14px;
+    font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+    font-size: 9pt;
+    line-height: 1.4;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.8em 0;
+    font-size: 10pt;
+}
+th, td {
+    border: 1px solid #333;
+    padding: 5px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+th { background: #e8e8e8; font-weight: 600; }
+tr:nth-child(even) { background: #fafafa; }
+a { color: #0066cc; text-decoration: none; }
+a:hover { text-decoration: underline; }
+ul, ol { padding-left: 1.5em; }
+.toc { background: #f9f9f9; border: 1px solid #ccc; padding: 15px 20px; border-radius: 4px; }
+.toc ul { list-style: none; padding-left: 0; }
+.toc ul ul { padding-left: 1.5em; }
+.toc li { margin-bottom: 3px; }
+.title-page { text-align: center; padding: 60px 0; }
+.title-page h1 { font-size: 32pt; margin-bottom: 10px; }
+.title-page .subtitle { font-size: 14pt; color: #555; margin-bottom: 40px; }
+.title-page .meta { font-size: 11pt; color: #333; line-height: 2; }
+.note {
+    background: #fffde6;
+    border-left: 4px solid #e6c200;
+    padding: 8px 12px;
+    margin: 10px 0;
+    font-size: 10pt;
+}
+.block-diagram {
+    font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+    font-size: 8.5pt;
+    line-height: 1.3;
+}
+
+/* ── Print styles ────────────────────────────────────────────── */
+@media print {
+    body { padding: 15mm 20mm; font-size: 10pt; }
+    .page-break { page-break-before: always; }
+    h2 { page-break-after: avoid; }
+    table { page-break-inside: avoid; }
+    pre { page-break-inside: avoid; }
+    .toc { page-break-after: always; }
+    a { color: #000; }
+    .note { border-left-color: #666; background: #f5f5f5; }
+    tr:nth-child(even) { background: #f5f5f5; }
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 1: TITLE PAGE -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="title-page">
+    <h1>GATEWAY</h1>
+    <div class="subtitle">STM32F103 IoT Gateway — Technical Documentation</div>
+    <hr style="width:60%; margin:30px auto; border:1px solid #333;">
+    <div class="meta">
+        <strong>Hardware:</strong> STM32F103C8T6 (BluePill) + SIMCom A7670C / Quectel EC200U<br>
+        <strong>Version:</strong> Firmware v1.0 (Build Config v4)<br>
+        <strong>Date:</strong> May 2026<br>
+        <strong>IDE:</strong> STM32CubeIDE 1.6.0<br>
+        <strong>Toolchain:</strong> arm-none-eabi-gcc 9-2020-q2
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 2: TABLE OF CONTENTS -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2>Table of Contents</h2>
+<div class="toc">
+<ul>
+    <li><a href="#overview">1. System Overview</a>
+        <ul>
+            <li><a href="#overview-features">1.1 Key Features</a></li>
+            <li><a href="#overview-block">1.2 Block Diagram</a></li>
+        </ul>
+    </li>
+    <li><a href="#hardware">2. Hardware</a>
+        <ul>
+            <li><a href="#hw-mcu">2.1 MCU</a></li>
+            <li><a href="#hw-gsm">2.2 GSM Module</a></li>
+            <li><a href="#hw-display">2.3 Display</a></li>
+            <li><a href="#hw-storage">2.4 Storage</a></li>
+            <li><a href="#hw-rs485">2.5 RS-485 / Modbus</a></li>
+            <li><a href="#hw-led">2.6 LED Indicators</a></li>
+            <li><a href="#hw-debug">2.7 Debug Interface</a></li>
+            <li><a href="#hw-pinmap">2.8 Pin Map</a></li>
+        </ul>
+    </li>
+    <li><a href="#software">3. Software Architecture</a>
+        <ul>
+            <li><a href="#sw-structure">3.1 Folder Structure</a></li>
+            <li><a href="#sw-modules">3.2 Module Descriptions</a></li>
+            <li><a href="#sw-gsm-sm">3.3 GSM State Machine</a></li>
+        </ul>
+    </li>
+    <li><a href="#modem-hal">4. Modem HAL</a>
+        <ul>
+            <li><a href="#modem-selection">4.1 Compile-Time Modem Selection</a></li>
+            <li><a href="#modem-supported">4.2 Supported Modems</a></li>
+            <li><a href="#modem-adding">4.3 Adding a New Modem</a></li>
+            <li><a href="#modem-api">4.4 API Reference</a></li>
+        </ul>
+    </li>
+    <li><a href="#ota">5. OTA Update System</a>
+        <ul>
+            <li><a href="#ota-overview">5.1 Overview</a></li>
+            <li><a href="#ota-flow">5.2 Update Flow</a></li>
+            <li><a href="#ota-commands">5.3 MQTT Command Format</a></li>
+            <li><a href="#ota-hosting">5.4 Hosting Requirements</a></li>
+            <li><a href="#ota-flash-map">5.5 SPI Flash Map</a></li>
+        </ul>
+    </li>
+    <li><a href="#config">6. Configuration</a>
+        <ul>
+            <li><a href="#cfg-structure">6.1 Config Structure</a></li>
+            <li><a href="#cfg-flash">6.2 Flash Storage</a></li>
+            <li><a href="#cfg-mqtt">6.3 MQTT Settings</a></li>
+            <li><a href="#cfg-modbus">6.4 Modbus Registers</a></li>
+        </ul>
+    </li>
+    <li><a href="#cli">7. CLI Reference</a></li>
+    <li><a href="#build">8. Build System</a>
+        <ul>
+            <li><a href="#build-debug">8.1 Debug Build</a></li>
+            <li><a href="#build-release">8.2 Release / Production Build</a></li>
+            <li><a href="#build-flags">8.3 Compiler Flags</a></li>
+            <li><a href="#build-sizes">8.4 Expected Sizes</a></li>
+        </ul>
+    </li>
+    <li><a href="#deployment">9. Deployment</a>
+        <ul>
+            <li><a href="#deploy-serial">9.1 Serial Flashing</a></li>
+            <li><a href="#deploy-ota">9.2 OTA Update Procedure</a></li>
+            <li><a href="#deploy-hosting">9.3 GitHub Pages Hosting</a></li>
+        </ul>
+    </li>
+    <li><a href="#troubleshooting">10. Troubleshooting</a></li>
+</ul>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 3: SYSTEM OVERVIEW -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="overview">1. System Overview</h2>
+
+<p>The GATEWAY project is an STM32F103C8T6 (BluePill) based IoT gateway that reads industrial sensors via Modbus RTU (RS-485) and publishes telemetry data over MQTT using a 4G LTE cellular modem. It supports both SIMCom A7670C and Quectel EC200U modules through a compile-time hardware abstraction layer.</p>
+
+<p>The system is designed for remote industrial monitoring where sensors (energy meters, temperature probes, PLCs) are connected via RS-485 and data must be transmitted to a cloud platform over cellular connectivity.</p>
+
+<h3 id="overview-features">1.1 Key Features</h3>
+<ul>
+    <li>Modbus RTU master with up to 32 configurable registers</li>
+    <li>Delta telemetry mode — only publishes changed values to save bandwidth</li>
+    <li>MQTT publish with QoS 1 over 4G LTE</li>
+    <li>Compile-time modem HAL supporting SIMCom and Quectel families</li>
+    <li>OTA firmware update via MQTT command + HTTPS download to external SPI flash</li>
+    <li>Serial firmware update via USB-C (bootloader + Python tool)</li>
+    <li>Ping-pong flash configuration with CRC32 validation</li>
+    <li>Full CLI interface over USB-C serial (115200 baud)</li>
+    <li>Alarm bit definitions with named alarm mappings</li>
+    <li>RGB LED status indication and heartbeat on built-in LED</li>
+</ul>
+
+<h3 id="overview-block">1.2 Block Diagram</h3>
+<pre class="block-diagram">
+                           +------------------+
+                           |   Cloud/Broker   |
+                           |  (MQTT Server)   |
+                           +--------+---------+
+                                    |  4G LTE
+                                    |
++----------+    USART2     +--------+---------+
+|  SIMCom  |&lt;------------&gt;|                  |     I2C1      +----------+
+|  A7670C  |  (115200)    |   STM32F103C8T6  |&lt;------------&gt;|  SSD1306 |
+|  or      |              |   (BluePill)      |              |  OLED    |
+|  EC200U  |              |                  |              +----------+
++----------+              |   Main MCU       |
+                          |                  |     SPI1      +----------+
++----------+    USART3    |                  |&lt;------------&gt;|  W25Q64  |
+|  Modbus  |&lt;------------&gt;|                  |              |  8MB     |
+|  Sensors |  RS-485      |                  |              +----------+
+|  (RTU)   |  (9600)      |                  |
++----------+              +--------+---------+
+                                   |
+                              USART1 (115200)
+                                   |
+                          +--------+---------+
+                          |   CH340 USB-C    |
+                          |   Debug CLI      |
+                          +------------------+
+</pre>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 4: HARDWARE -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="hardware">2. Hardware</h2>
+
+<h3 id="hw-mcu">2.1 MCU — STM32F103C8T6</h3>
+<table>
+    <tr><th>Parameter</th><th>Value</th></tr>
+    <tr><td>Core</td><td>ARM Cortex-M3, 72 MHz</td></tr>
+    <tr><td>Flash (official)</td><td>64 KB (using ~65 KB — relies on common 128 KB hidden flash)</td></tr>
+    <tr><td>SRAM</td><td>20 KB</td></tr>
+    <tr><td>Package</td><td>LQFP-48 (BluePill board)</td></tr>
+    <tr><td>Flash Map</td><td>Bootloader 12 KB (0x08000000) + App 108 KB (0x08003000)</td></tr>
+    <tr><td>Config Pages</td><td>2 x 2 KB at 0x0801E000 and 0x0801E800</td></tr>
+</table>
+
+<h3 id="hw-gsm">2.2 GSM Module</h3>
+<table>
+    <tr><th>Parameter</th><th>SIMCom A7670C</th><th>Quectel EC200U</th></tr>
+    <tr><td>Category</td><td>4G LTE Cat-1</td><td>4G LTE Cat-1</td></tr>
+    <tr><td>Interface</td><td>USART2 (PA2/PA3, 115200)</td><td>USART2 (PA2/PA3, 115200)</td></tr>
+    <tr><td>Reset Pin</td><td>PB4, active LOW pulse</td><td>PB4, active HIGH pulse</td></tr>
+    <tr><td>Boot Indicator</td><td>"RDY" URC</td><td>"RDY" URC</td></tr>
+    <tr><td>MQTT AT Commands</td><td>AT+CMQTT*</td><td>AT+QMT*</td></tr>
+    <tr><td>HTTP AT Commands</td><td>AT+HTTP*</td><td>AT+QHTTP* / AT+QSSLOPEN (for HTTPS)</td></tr>
+</table>
+
+<div class="note"><strong>Note:</strong> The modem does NOT use a PWRKEY pin. Only RESET is connected. The SIMCom sends "RDY" URC on boot but this is sometimes missed — AT probing with retries handles this case.</div>
+
+<h3 id="hw-display">2.3 Display — SSD1306 OLED</h3>
+<table>
+    <tr><th>Parameter</th><th>Value</th></tr>
+    <tr><td>Type</td><td>0.91" 128x32 OLED</td></tr>
+    <tr><td>Interface</td><td>I2C1 (PB6=SCL, PB7=SDA)</td></tr>
+    <tr><td>Address</td><td>0x3C</td></tr>
+    <tr><td>Status</td><td>Not working (needs debugging — may need external pull-ups)</td></tr>
+</table>
+
+<h3 id="hw-storage">2.4 Storage — W25Q64 SPI Flash</h3>
+<table>
+    <tr><th>Parameter</th><th>Value</th></tr>
+    <tr><td>Capacity</td><td>8 MB (64 Mbit)</td></tr>
+    <tr><td>Interface</td><td>SPI1 (PA5=SCK, PA6=MISO, PA7=MOSI, PA8=CS)</td></tr>
+    <tr><td>Purpose</td><td>OTA firmware storage, telemetry logging, config mirror</td></tr>
+    <tr><td>Status</td><td>Hardware not yet received — all operations guarded by <code>spi_flash_ok</code> flag</td></tr>
+</table>
+
+<h3 id="hw-rs485">2.5 RS-485 / Modbus RTU</h3>
+<table>
+    <tr><th>Parameter</th><th>Value</th></tr>
+    <tr><td>Transceiver</td><td>MAX485</td></tr>
+    <tr><td>UART</td><td>USART3 (PB10=TX, PB11=RX)</td></tr>
+    <tr><td>DE/RE Control</td><td>PA4 (directly connected, shared pin)</td></tr>
+    <tr><td>Default Baud</td><td>9600</td></tr>
+    <tr><td>Protocol</td><td>Modbus RTU (function codes 0x03 and 0x04)</td></tr>
+</table>
+
+<h3 id="hw-led">2.6 LED Indicators</h3>
+<table>
+    <tr><th>LED</th><th>Pin</th><th>Logic</th><th>Purpose</th></tr>
+    <tr><td>Red</td><td>PB0</td><td>Inverted (LOW=ON)</td><td>Error / OTA in progress</td></tr>
+    <tr><td>Green</td><td>PB1</td><td>Inverted (LOW=ON)</td><td>Connected / OK</td></tr>
+    <tr><td>Blue</td><td>PB3</td><td>Inverted (LOW=ON)</td><td>Activity / Modbus polling</td></tr>
+    <tr><td>Built-in</td><td>PC13</td><td>Inverted (LOW=ON)</td><td>Heartbeat blink (500ms)</td></tr>
+</table>
+<p>The RGB LED is common anode type — setting a pin LOW turns that color ON.</p>
+
+<h3 id="hw-debug">2.7 Debug Interface</h3>
+<table>
+    <tr><th>Parameter</th><th>Value</th></tr>
+    <tr><td>UART</td><td>USART1 (PA9=TX, PA10=RX)</td></tr>
+    <tr><td>Baud Rate</td><td>115200, 8N1</td></tr>
+    <tr><td>USB Converter</td><td>CH340 (USB-C connector on BluePill board)</td></tr>
+    <tr><td>Features</td><td>Full CLI interface, debug logging, AT passthrough</td></tr>
+</table>
+
+<h3 id="hw-pinmap">2.8 Pin Map</h3>
+<table>
+    <tr><th>Pin</th><th>Function</th><th>Peripheral</th><th>Notes</th></tr>
+    <tr><td>PA2</td><td>USART2 TX</td><td>GSM Module</td><td>115200 baud</td></tr>
+    <tr><td>PA3</td><td>USART2 RX</td><td>GSM Module</td><td>115200 baud</td></tr>
+    <tr><td>PA4</td><td>GPIO Output</td><td>RS-485 DE/RE</td><td>Direction control for MAX485</td></tr>
+    <tr><td>PA5</td><td>SPI1 SCK</td><td>W25Q64 Flash</td><td></td></tr>
+    <tr><td>PA6</td><td>SPI1 MISO</td><td>W25Q64 Flash</td><td></td></tr>
+    <tr><td>PA7</td><td>SPI1 MOSI</td><td>W25Q64 Flash</td><td></td></tr>
+    <tr><td>PA8</td><td>GPIO Output</td><td>W25Q64 CS</td><td>Active LOW</td></tr>
+    <tr><td>PA9</td><td>USART1 TX</td><td>Debug CLI</td><td>CH340 USB-C, 115200 baud</td></tr>
+    <tr><td>PA10</td><td>USART1 RX</td><td>Debug CLI</td><td>CH340 USB-C, 115200 baud</td></tr>
+    <tr><td>PB0</td><td>GPIO Output</td><td>RGB LED Red</td><td>Common anode, LOW=ON</td></tr>
+    <tr><td>PB1</td><td>GPIO Output</td><td>RGB LED Green</td><td>Common anode, LOW=ON</td></tr>
+    <tr><td>PB3</td><td>GPIO Output</td><td>RGB LED Blue</td><td>Common anode, LOW=ON</td></tr>
+    <tr><td>PB4</td><td>GPIO Output</td><td>GSM RESET</td><td>A7670C: active LOW; EC200U: active HIGH</td></tr>
+    <tr><td>PB6</td><td>I2C1 SCL</td><td>SSD1306 OLED</td><td>Address 0x3C</td></tr>
+    <tr><td>PB7</td><td>I2C1 SDA</td><td>SSD1306 OLED</td><td>Address 0x3C</td></tr>
+    <tr><td>PB10</td><td>USART3 TX</td><td>Modbus RS-485</td><td>9600 baud default</td></tr>
+    <tr><td>PB11</td><td>USART3 RX</td><td>Modbus RS-485</td><td>9600 baud default</td></tr>
+    <tr><td>PC13</td><td>GPIO Output</td><td>Built-in LED</td><td>Heartbeat 500ms blink</td></tr>
+</table>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 5: SOFTWARE ARCHITECTURE -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="software">3. Software Architecture</h2>
+
+<h3 id="sw-structure">3.1 Folder Structure</h3>
+<pre>
+GATEWAY/
+  Core/
+    Inc/            All header files (.h) — config, modem_hal, bootloader, etc.
+    Src/            CubeMX-generated sources (main, gpio, i2c, spi, usart, interrupts)
+  App/
+    01_Communication/
+      gsm_sm.c          Non-blocking GSM connection state machine
+      gsm_a7670c.c      SIMCom A7670C modem driver (AT+CMQTT, AT+HTTP)
+      modem_quectel.c   Quectel EC200U modem driver (AT+QMT, AT+QHTTP)
+      modem_hal.c       Unified modem HAL dispatcher
+      modem_at.c        Low-level AT command send/receive with ring buffer
+      modbus.c          Modbus RTU master implementation
+    02_Display/
+      ssd1306.c         SSD1306 OLED driver (I2C)
+      rgb_led.c         RGB LED control with brightness
+    03_Storage/
+      w25q_spi.c        W25Q64 SPI flash driver
+      config.c          Configuration load/save with ping-pong flash pages
+    04_Telemetry/
+      telemetry.c       Delta telemetry publishing, JSON formatting
+    05_OTA/
+      ota_manager.c     OTA download, verify, metadata write, reboot trigger
+    06_Debug/
+      debug_cli.c       CLI command processor, debug logging
+  Bootloader/
+    Src/                Bootloader main (separate project, 12 KB)
+    STM32F103_BOOTLOADER.ld   Linker script for bootloader
+  Tools/
+    fw_update.py        Python serial firmware update tool
+  Docs/
+    Various HTML docs, test scripts, dashboard
+</pre>
+
+<h3 id="sw-modules">3.2 Module Descriptions</h3>
+<table>
+    <tr><th>Module</th><th>File(s)</th><th>Description</th></tr>
+    <tr><td>GSM State Machine</td><td>gsm_sm.c</td><td>Non-blocking state machine managing the entire GSM connection lifecycle from reset to MQTT connected state</td></tr>
+    <tr><td>Modem HAL</td><td>modem_hal.c/h</td><td>Compile-time modem abstraction. Exposes unified API; routes to correct driver via vtable pointer</td></tr>
+    <tr><td>AT Engine</td><td>modem_at.c</td><td>Low-level AT command send/receive with UART ring buffer, accumulator, and polling-based response parsing</td></tr>
+    <tr><td>SIMCom Driver</td><td>gsm_a7670c.c</td><td>AT+CMQTT* and AT+HTTP* command sequences for SIMCom A7670C</td></tr>
+    <tr><td>Quectel Driver</td><td>modem_quectel.c</td><td>AT+QMT* and AT+QSSL*/AT+QHTTP* command sequences for Quectel EC200U</td></tr>
+    <tr><td>Modbus</td><td>modbus.c</td><td>Modbus RTU master — polls configured registers, CRC16, multi-type support</td></tr>
+    <tr><td>Telemetry</td><td>telemetry.c</td><td>Delta-mode telemetry publisher. Only sends changed values. Formats JSON payloads.</td></tr>
+    <tr><td>Config</td><td>config.c</td><td>Configuration management with flash ping-pong wear levelling and CRC32 validation</td></tr>
+    <tr><td>OTA Manager</td><td>ota_manager.c</td><td>Handles MQTT OTA commands, downloads firmware to W25Q64, verifies CRC, triggers bootloader</td></tr>
+    <tr><td>CLI</td><td>debug_cli.c</td><td>Interactive command-line interface over USART1 with command parsing and dispatch</td></tr>
+    <tr><td>Display</td><td>ssd1306.c</td><td>SSD1306 OLED driver (currently non-functional)</td></tr>
+    <tr><td>RGB LED</td><td>rgb_led.c</td><td>RGB status LED with software PWM brightness control</td></tr>
+    <tr><td>W25Q64</td><td>w25q_spi.c</td><td>SPI flash driver — read, write, erase sector/range, detect</td></tr>
+</table>
+
+<h3 id="sw-gsm-sm">3.3 GSM State Machine</h3>
+<p>The GSM connection is managed by a fully non-blocking state machine (<code>gsm_sm.c</code>) that is called from the main loop. It progresses through the following states:</p>
+
+<pre>
+IDLE --&gt; RESET --&gt; RESET_HOLD (200ms) --&gt; BOOT_WAIT (6s, wait for "RDY")
+  |
+  +-&gt; AT_PROBE (retry AT every 1s, 10s total)
+  |
+  +-&gt; ECHO_OFF (ATE0)
+  |
+  +-&gt; CMEE (AT+CMEE=2)
+  |
+  +-&gt; SIM_CHECK (AT+CPIN?)
+  |
+  +-&gt; NET_SEND / NET_RECV / NET_PAUSE (AT+CEREG? loop, 90s total)
+  |
+  +-&gt; APN_SET (modem-specific APN command)
+  |
+  +-&gt; PDP_ACT (activate PDP context) --&gt; PDP_CHECK (fallback verify)
+  |
+  +-&gt; MQTT_CLEANUP (vtable: close any stale sessions)
+  |
+  +-&gt; MQTT_OPEN (vtable: connect to broker)
+  |
+  +-&gt; MQTT_SUB (subscribe to command topic)
+  |
+  +-&gt; CONNECTED
+  |
+  +-&gt; ERROR (retry after timer)
+</pre>
+
+<table>
+    <tr><th>State</th><th>Description</th><th>Timeout</th></tr>
+    <tr><td>ST_IDLE</td><td>Initial state, waiting for kick</td><td>-</td></tr>
+    <tr><td>ST_RESET</td><td>Assert modem reset pin</td><td>-</td></tr>
+    <tr><td>ST_RESET_HOLD</td><td>Hold reset LOW for 200ms</td><td>200ms</td></tr>
+    <tr><td>ST_BOOT_WAIT</td><td>Wait for "RDY" URC from modem</td><td>6s</td></tr>
+    <tr><td>ST_AT_PROBE</td><td>Send "AT", wait for "OK", retry every 1s</td><td>10s total</td></tr>
+    <tr><td>ST_ECHO_OFF</td><td>Send "ATE0"</td><td>2s</td></tr>
+    <tr><td>ST_CMEE</td><td>Send "AT+CMEE=2" (verbose errors)</td><td>2s</td></tr>
+    <tr><td>ST_SIM_CHECK</td><td>Send "AT+CPIN?", expect "+CPIN: READY"</td><td>5s</td></tr>
+    <tr><td>ST_NET_SEND/RECV/PAUSE</td><td>Poll AT+CEREG? for registration (stat=1 or 5)</td><td>90s total</td></tr>
+    <tr><td>ST_APN_SET</td><td>Configure APN (modem-specific format)</td><td>5s</td></tr>
+    <tr><td>ST_PDP_ACT</td><td>Activate PDP context</td><td>30s</td></tr>
+    <tr><td>ST_PDP_CHECK</td><td>Verify PDP activation (fallback)</td><td>5s</td></tr>
+    <tr><td>ST_MQTT_CLEANUP</td><td>Close any stale MQTT sessions (vtable)</td><td>varies</td></tr>
+    <tr><td>ST_MQTT_OPEN</td><td>Connect to MQTT broker (vtable)</td><td>varies</td></tr>
+    <tr><td>ST_MQTT_SUB</td><td>Subscribe to command topic</td><td>5s</td></tr>
+    <tr><td>ST_CONNECTED</td><td>Steady state — MQTT is up</td><td>-</td></tr>
+    <tr><td>ST_ERROR</td><td>Failure state — retry after backoff timer</td><td>30s</td></tr>
+</table>
+
+<p>The MQTT-specific sequences (CLEANUP and OPEN states) are delegated to the modem driver vtable, keeping <code>gsm_sm.c</code> modem-agnostic.</p>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 6: MODEM HAL -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="modem-hal">4. Modem HAL</h2>
+
+<h3 id="modem-selection">4.1 Compile-Time Modem Selection</h3>
+<p>Only one modem driver is compiled into the firmware at a time, saving approximately 2-4 KB flash and 350 bytes RAM. Selection is made in <code>Core/Inc/modem_config.h</code>:</p>
+
+<pre>
+/* Modem driver IDs */
+#define MODEM_DRV_SIMCOM   0   /* SIMCom A7670C  -- AT+CMQTT, AT+HTTP */
+#define MODEM_DRV_QUECTEL  1   /* Quectel EC200U -- AT+QMT, AT+QHTTP  */
+
+/* SELECT YOUR MODEM HERE */
+#define MODEM_DRIVER  MODEM_DRV_QUECTEL
+</pre>
+
+<p>To switch modems, change <code>MODEM_DRIVER</code> to the desired ID and rebuild the project. The preprocessor in <code>modem_hal.h</code> selects the correct vtable at compile time:</p>
+
+<pre>
+#if MODEM_DRIVER == MODEM_DRV_QUECTEL
+  extern const ModemOps_t g_quectel_ops;
+  #define MODEM_OPS  (&amp;g_quectel_ops)
+#elif MODEM_DRIVER == MODEM_DRV_SIMCOM
+  extern const ModemOps_t g_simcom_ops;
+  #define MODEM_OPS  (&amp;g_simcom_ops)
+#else
+  #error "MODEM_DRIVER not set -- edit modem_config.h"
+#endif
+</pre>
+
+<h3 id="modem-supported">4.2 Supported Modems</h3>
+<table>
+    <tr><th>Modem</th><th>Driver ID</th><th>MQTT Commands</th><th>HTTP Commands</th><th>HTTPS Method</th></tr>
+    <tr><td>SIMCom A7670C</td><td>MODEM_DRV_SIMCOM (0)</td><td>AT+CMQTT*</td><td>AT+HTTP*</td><td>AT+HTTP (native)</td></tr>
+    <tr><td>Quectel EC200U</td><td>MODEM_DRV_QUECTEL (1)</td><td>AT+QMT*</td><td>AT+QHTTP*</td><td>AT+QSSLOPEN (raw SSL socket)</td></tr>
+</table>
+
+<div class="note"><strong>Note:</strong> On Quectel EC200U, <code>AT+QHTTPGET</code> is broken for HTTPS URLs. The workaround uses <code>AT+QSSLOPEN</code> to open a raw SSL socket, send the HTTP request manually, and stream the response. This is implemented in the streaming download function.</div>
+
+<h3 id="modem-adding">4.3 Adding a New Modem</h3>
+<ol>
+    <li>Create <code>modem_&lt;name&gt;.c</code> in <code>App/01_Communication/</code></li>
+    <li>Populate a <code>const ModemOps_t</code> struct with your implementations for all vtable fields</li>
+    <li>Add a new <code>#define MODEM_DRV_&lt;NAME&gt;</code> ID in <code>modem_config.h</code></li>
+    <li>Add a corresponding <code>#elif</code> case in <code>modem_hal.h</code> that externs your ops struct and defines <code>MODEM_OPS</code></li>
+    <li>Implement all required vtable functions (MQTT connect/publish/disconnect/subscribe, HTTP get/range/download, SM steps)</li>
+</ol>
+
+<h3 id="modem-api">4.4 API Reference</h3>
+
+<h4>Initialization</h4>
+<table>
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><code>Modem_Init(huart, rst_port, rst_pin)</code></td><td>Initialize modem HAL with UART handle and reset GPIO</td></tr>
+    <tr><td><code>Modem_GetOps()</code></td><td>Get pointer to active modem vtable</td></tr>
+</table>
+
+<h4>Hardware Control</h4>
+<table>
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><code>Modem_ResetAssert()</code></td><td>Assert modem reset (level depends on modem type)</td></tr>
+    <tr><td><code>Modem_ResetRelease()</code></td><td>Release modem reset</td></tr>
+    <tr><td><code>Modem_PowerOn()</code></td><td>Power on sequence</td></tr>
+    <tr><td><code>Modem_WaitReady(timeout_ms)</code></td><td>Wait for modem ready indication</td></tr>
+    <tr><td><code>Modem_Reboot()</code></td><td>Send modem reboot AT command</td></tr>
+</table>
+
+<h4>Network</h4>
+<table>
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><code>Modem_GetSignalQuality(rssi_dbm)</code></td><td>Get RSSI in dBm</td></tr>
+</table>
+
+<h4>MQTT</h4>
+<table>
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><code>Modem_MqttPublish(topic, payload, len, qos)</code></td><td>Publish message to topic</td></tr>
+    <tr><td><code>Modem_MqttDisconnect()</code></td><td>Disconnect from MQTT broker</td></tr>
+    <tr><td><code>Modem_MqttIsConnected()</code></td><td>Check if MQTT session is active</td></tr>
+    <tr><td><code>Modem_MqttSubscribe(topic, qos)</code></td><td>Subscribe to a topic</td></tr>
+    <tr><td><code>Modem_MqttCheckRx(topic_out, topic_sz, payload_out, payload_sz)</code></td><td>Check for received MQTT messages (non-blocking)</td></tr>
+    <tr><td><code>Modem_MqttCheckURC()</code></td><td>Process any pending MQTT URCs</td></tr>
+    <tr><td><code>Modem_MqttSetUp(up)</code></td><td>Set internal MQTT connection status flag</td></tr>
+</table>
+
+<h4>HTTP</h4>
+<table>
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><code>Modem_HttpGet(url, out_buf, buf_len, out_len)</code></td><td>HTTP GET, response into buffer</td></tr>
+    <tr><td><code>Modem_HttpGetRange(url, start, end, buf, out_len)</code></td><td>HTTP GET with Range header (for chunked download)</td></tr>
+    <tr><td><code>Modem_HttpDownloadToFlash(url, flash_addr, expected_size, out_written, cb)</code></td><td>Stream download directly to SPI flash with progress callback</td></tr>
+</table>
+
+<h4>Vtable (ModemOps_t) Fields</h4>
+<table>
+    <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    <tr><td><code>reset_assert_level</code></td><td>GPIO_PinState</td><td>Level to assert reset (LOW for SIMCom, HIGH for Quectel)</td></tr>
+    <tr><td><code>apn_cmd_fmt</code></td><td>const char*</td><td>printf format for APN command</td></tr>
+    <tr><td><code>pdp_act_cmd</code></td><td>const char*</td><td>PDP context activation command</td></tr>
+    <tr><td><code>pdp_act_timeout_ms</code></td><td>uint32_t</td><td>Timeout for PDP activation</td></tr>
+    <tr><td><code>pdp_check_cmd</code></td><td>const char*</td><td>PDP check command</td></tr>
+    <tr><td><code>pdp_check_expect</code></td><td>const char*</td><td>Expected response for PDP check</td></tr>
+    <tr><td><code>mqtt_connect</code></td><td>function ptr</td><td>MQTT connect implementation</td></tr>
+    <tr><td><code>mqtt_publish</code></td><td>function ptr</td><td>MQTT publish implementation</td></tr>
+    <tr><td><code>mqtt_disconnect</code></td><td>function ptr</td><td>MQTT disconnect implementation</td></tr>
+    <tr><td><code>mqtt_subscribe</code></td><td>function ptr</td><td>MQTT subscribe implementation</td></tr>
+    <tr><td><code>mqtt_check_rx</code></td><td>function ptr</td><td>Check for received messages</td></tr>
+    <tr><td><code>mqtt_check_urc</code></td><td>function ptr</td><td>Process MQTT URCs</td></tr>
+    <tr><td><code>sm_mqtt_cleanup_begin/poll</code></td><td>function ptrs</td><td>Non-blocking MQTT cleanup for SM</td></tr>
+    <tr><td><code>sm_mqtt_open_begin/poll</code></td><td>function ptrs</td><td>Non-blocking MQTT open for SM</td></tr>
+    <tr><td><code>http_get</code></td><td>function ptr</td><td>HTTP GET to buffer</td></tr>
+    <tr><td><code>http_get_range</code></td><td>function ptr</td><td>HTTP GET with Range header</td></tr>
+    <tr><td><code>http_download_to_flash</code></td><td>function ptr</td><td>Streaming download to SPI flash</td></tr>
+    <tr><td><code>reboot_cmd</code></td><td>const char*</td><td>AT command to reboot modem</td></tr>
+</table>
+
+<h4>Result Codes (GsmResult_t)</h4>
+<table>
+    <tr><th>Code</th><th>Value</th><th>Meaning</th></tr>
+    <tr><td>GSM_OK</td><td>0</td><td>Success</td></tr>
+    <tr><td>GSM_ERR_TIMEOUT</td><td>1</td><td>Response timeout</td></tr>
+    <tr><td>GSM_ERR_NO_RESPONSE</td><td>2</td><td>No response from modem</td></tr>
+    <tr><td>GSM_ERR_SIM_NOT_READY</td><td>3</td><td>SIM card not ready</td></tr>
+    <tr><td>GSM_ERR_NO_NETWORK</td><td>4</td><td>No network registration</td></tr>
+    <tr><td>GSM_ERR_PDP_FAIL</td><td>5</td><td>PDP context activation failed</td></tr>
+    <tr><td>GSM_ERR_MQTT_FAIL</td><td>6</td><td>MQTT operation failed</td></tr>
+    <tr><td>GSM_ERR_HTTP_FAIL</td><td>7</td><td>HTTP operation failed</td></tr>
+</table>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 7: OTA UPDATE SYSTEM -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="ota">5. OTA Update System</h2>
+
+<h3 id="ota-overview">5.1 Overview</h3>
+<p>The OTA system allows remote firmware updates via MQTT command. The flow is:</p>
+<ol>
+    <li>Device receives OTA command on MQTT subscription topic</li>
+    <li>Application disconnects MQTT to free modem resources</li>
+    <li>Downloads firmware binary via HTTPS (streaming to SPI flash)</li>
+    <li>Verifies CRC32 of downloaded data against expected value</li>
+    <li>Writes OTA metadata to SPI flash</li>
+    <li>Sets SRAM magic flag and reboots into bootloader</li>
+    <li>Bootloader reads metadata, copies firmware from SPI flash to internal flash</li>
+    <li>Bootloader boots new firmware; application confirms boot via <code>BL_ConfirmBoot()</code></li>
+</ol>
+
+<h3 id="ota-flow">5.2 Update Flow</h3>
+<pre>
+MQTT Command Received
+       |
+       v
+Parse URL, size, CRC32, version
+       |
+       v
+Disconnect MQTT (free modem for HTTP)
+       |
+       v
+Erase W25Q64 Slot A
+       |
+       v
+Stream download via Modem_HttpDownloadToFlash()
+  (SSL socket on Quectel / HTTP on SIMCom)
+       |
+       v
+Read back from SPI flash, compute CRC32
+       |
+       v
+CRC match? --NO--> Return OTA_RESULT_VERIFY_FAIL
+       |
+      YES
+       |
+       v
+Write OtaMeta_t to SPI flash (status = DOWNLOADED)
+       |
+       v
+Set SRAM flag (0xDEAD600D @ 0x20004FFC)
+       |
+       v
+NVIC_SystemReset() --> Bootloader
+       |
+       v
+Bootloader reads OtaMeta_t from W25Q64
+       |
+       v
+Copies Slot A --> Internal flash (0x08003000)
+       |
+       v
+Sets status = SUCCESS, boots application
+       |
+       v
+Application calls BL_ConfirmBoot() after MQTT reconnect
+</pre>
+
+<h3 id="ota-commands">5.3 MQTT Command Format</h3>
+<p>OTA updates are triggered by publishing to the device's command topic. Two formats are supported:</p>
+
+<h4>JSON Format</h4>
+<pre>
+{
+  "cmd": "ota",
+  "url": "https://example.com/firmware/gateway_v1.2.0.bin",
+  "size": "55296",
+  "crc32": "0xA1B2C3D4",
+  "version": "1.2.0"
+}
+</pre>
+
+<h4>CSV Format</h4>
+<pre>
+ota,https://example.com/firmware/gateway_v1.2.0.bin,55296,0xA1B2C3D4,1.2.0
+</pre>
+
+<table>
+    <tr><th>Field</th><th>Required</th><th>Description</th></tr>
+    <tr><td>cmd / prefix</td><td>Yes</td><td>Must be "ota"</td></tr>
+    <tr><td>url</td><td>Yes</td><td>HTTPS URL to firmware binary</td></tr>
+    <tr><td>size</td><td>Yes</td><td>Firmware size in bytes (max 128 KB)</td></tr>
+    <tr><td>crc32</td><td>No</td><td>Expected CRC32 (0 = skip verification)</td></tr>
+    <tr><td>version</td><td>No</td><td>Firmware version (M.m.p format or integer)</td></tr>
+</table>
+
+<h3 id="ota-hosting">5.4 Hosting Requirements</h3>
+<ul>
+    <li><strong>HTTPS required</strong> — firmware must be served over HTTPS for security</li>
+    <li><strong>SIMCom A7670C:</strong> Uses native <code>AT+HTTP*</code> commands which support HTTPS directly</li>
+    <li><strong>Quectel EC200U:</strong> <code>AT+QHTTPGET</code> is broken for HTTPS. Uses <code>AT+QSSLOPEN</code> to open a raw SSL/TLS socket and sends a manual HTTP GET request. The server must support HTTP/1.1 with <code>Content-Length</code> header.</li>
+    <li><strong>GitHub Pages</strong> is recommended for hosting firmware binaries (free HTTPS, reliable CDN)</li>
+    <li>Binary must be served with correct <code>Content-Length</code> header</li>
+    <li>Server must support direct download (no redirects requiring JavaScript)</li>
+</ul>
+
+<h3 id="ota-flash-map">5.5 SPI Flash Map (W25Q64, 8 MB)</h3>
+<table>
+    <tr><th>Address</th><th>Size</th><th>Purpose</th></tr>
+    <tr><td>0x000000</td><td>4 KB</td><td>OTA Metadata (OtaMeta_t)</td></tr>
+    <tr><td>0x001000</td><td>128 KB</td><td>FW Slot A (download target)</td></tr>
+    <tr><td>0x021000</td><td>128 KB</td><td>FW Slot B (previous FW backup for rollback)</td></tr>
+    <tr><td>0x041000</td><td>16 KB</td><td>Config mirror</td></tr>
+    <tr><td>0x045000</td><td>~7 MB</td><td>Telemetry log (ring buffer)</td></tr>
+</table>
+
+<h4>OTA Metadata Structure (OtaMeta_t)</h4>
+<table>
+    <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    <tr><td>magic</td><td>uint32_t</td><td>0xB007AB1E (valid marker)</td></tr>
+    <tr><td>fw_version</td><td>uint32_t</td><td>Packed version (M&lt;&lt;16 | m&lt;&lt;8 | p)</td></tr>
+    <tr><td>fw_size</td><td>uint32_t</td><td>Firmware binary size in bytes</td></tr>
+    <tr><td>fw_crc32</td><td>uint32_t</td><td>CRC32 of firmware binary</td></tr>
+    <tr><td>slot_addr</td><td>uint32_t</td><td>SPI flash slot address (0x001000 for Slot A)</td></tr>
+    <tr><td>status</td><td>OtaStatus_t</td><td>EMPTY/DOWNLOADED/FLASHING/SUCCESS/FAILED/ROLLBACK</td></tr>
+    <tr><td>timestamp</td><td>uint32_t</td><td>Update timestamp</td></tr>
+    <tr><td>fw_url</td><td>char[128]</td><td>Source URL for reference</td></tr>
+    <tr><td>first_boot_done</td><td>uint8_t</td><td>Set to 1 after successful boot confirmation</td></tr>
+    <tr><td>boot_attempts</td><td>uint8_t</td><td>Counter for rollback logic</td></tr>
+    <tr><td>meta_crc32</td><td>uint32_t</td><td>CRC32 of metadata structure itself</td></tr>
+</table>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 8: CONFIGURATION -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="config">6. Configuration</h2>
+
+<h3 id="cfg-structure">6.1 Config Structure (GatewayConfig_t)</h3>
+<p>The configuration is stored as a packed C struct with CRC32 footer for integrity checking.</p>
+
+<table>
+    <tr><th>Section</th><th>Fields</th><th>Description</th></tr>
+    <tr><td>Header</td><td><code>magic</code>, <code>cfg_version</code>, <code>write_count</code></td><td>Magic = 0xDE14A501, version = 4, write counter for wear levelling</td></tr>
+    <tr><td>Device</td><td><code>device_id</code>, <code>device_name[32]</code></td><td>16-bit ID derived from MCU UID, user-friendly name</td></tr>
+    <tr><td>Modbus</td><td><code>modbus_baud</code>, <code>parity</code>, <code>stop_bits</code>, <code>timeout_ms</code>, <code>poll_interval_ms</code>, <code>num_regs</code>, <code>regs[32]</code></td><td>RS-485 parameters and up to 32 register definitions</td></tr>
+    <tr><td>Telemetry</td><td><code>publish_interval_ms</code>, <code>delta_mode</code>, <code>delta_threshold</code></td><td>Publish timing and delta-mode settings</td></tr>
+    <tr><td>GSM/MQTT</td><td><code>modem_type</code>, <code>apn</code>, <code>broker</code>, <code>broker_port</code>, <code>mqtt_client_id</code>, <code>mqtt_user</code>, <code>mqtt_pass</code>, <code>mqtt_topic</code>, <code>mqtt_alarm_topic</code>, <code>mqtt_qos</code></td><td>Cellular and MQTT connection parameters</td></tr>
+    <tr><td>OTA</td><td><code>ota_manifest_url[128]</code>, <code>fw_version</code>, <code>ota_enabled</code></td><td>OTA manifest URL and current firmware version</td></tr>
+    <tr><td>Alarms</td><td><code>num_alarm_bits</code>, <code>alarm_bits[24]</code></td><td>Up to 24 named alarm bit definitions</td></tr>
+    <tr><td>Footer</td><td><code>crc32</code></td><td>CRC32 of entire structure (excluding this field)</td></tr>
+</table>
+
+<h4>Register Definition (RegDef_t)</h4>
+<table>
+    <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    <tr><td>slave_addr</td><td>uint8_t</td><td>Modbus slave address (1-247)</td></tr>
+    <tr><td>reg_addr</td><td>uint16_t</td><td>Register address</td></tr>
+    <tr><td>func_code</td><td>uint8_t</td><td>0x03 (holding) or 0x04 (input)</td></tr>
+    <tr><td>data_type</td><td>RegDataType_t</td><td>UINT16, INT16, UINT32, INT32, or FLOAT32</td></tr>
+    <tr><td>scale</td><td>float</td><td>Scaling factor (raw value * scale = published value)</td></tr>
+    <tr><td>tag</td><td>char[20]</td><td>JSON key name for telemetry publishing</td></tr>
+    <tr><td>enabled</td><td>uint8_t</td><td>1 = active, 0 = skip</td></tr>
+    <tr><td>is_alarm</td><td>uint8_t</td><td>0 = parameter, 1 = alarm register</td></tr>
+</table>
+
+<h4>Supported Data Types</h4>
+<table>
+    <tr><th>Enum</th><th>Value</th><th>Size</th><th>Description</th></tr>
+    <tr><td>DTYPE_UINT16</td><td>0</td><td>1 register</td><td>Unsigned 16-bit integer</td></tr>
+    <tr><td>DTYPE_INT16</td><td>1</td><td>1 register</td><td>Signed 16-bit integer</td></tr>
+    <tr><td>DTYPE_UINT32</td><td>2</td><td>2 registers</td><td>Unsigned 32-bit integer</td></tr>
+    <tr><td>DTYPE_INT32</td><td>3</td><td>2 registers</td><td>Signed 32-bit integer</td></tr>
+    <tr><td>DTYPE_FLOAT32</td><td>4</td><td>2 registers</td><td>IEEE 754 float</td></tr>
+</table>
+
+<h3 id="cfg-flash">6.2 Flash Storage (Ping-Pong)</h3>
+<p>Configuration is stored in internal STM32 flash using two pages for wear levelling:</p>
+<table>
+    <tr><th>Page</th><th>Address</th><th>Size</th></tr>
+    <tr><td>Config Page A</td><td>0x0801E000</td><td>2 KB</td></tr>
+    <tr><td>Config Page B</td><td>0x0801E800</td><td>2 KB</td></tr>
+</table>
+
+<p>On save, the page with the lower <code>write_count</code> is erased and written with the new config (incremented write_count). On load, the page with the higher valid <code>write_count</code> is used. This provides:</p>
+<ul>
+    <li>Power-fail safety (one page always has valid data)</li>
+    <li>Wear levelling (alternating between pages)</li>
+    <li>CRC32 validation on read</li>
+</ul>
+
+<h4>Config API</h4>
+<table>
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><code>Config_Init()</code></td><td>Load config from flash (or defaults if invalid)</td></tr>
+    <tr><td><code>Config_Get()</code></td><td>Get const pointer to active config</td></tr>
+    <tr><td><code>Config_GetMutable()</code></td><td>Get mutable pointer for modification</td></tr>
+    <tr><td><code>Config_Save()</code></td><td>Save current config to flash (ping-pong)</td></tr>
+    <tr><td><code>Config_LoadDefaults()</code></td><td>Reset to factory defaults (not saved until explicit save)</td></tr>
+    <tr><td><code>Config_Validate(cfg)</code></td><td>Verify magic, version, and CRC32</td></tr>
+    <tr><td><code>Config_Print()</code></td><td>Print all config to CLI</td></tr>
+    <tr><td><code>Config_GetMcuId()</code></td><td>Derive 16-bit device ID from 96-bit MCU UID</td></tr>
+</table>
+
+<h3 id="cfg-mqtt">6.3 MQTT Settings (Defaults)</h3>
+<table>
+    <tr><th>Parameter</th><th>Default Value</th></tr>
+    <tr><td>Broker</td><td><code>broker.emqx.io</code></td></tr>
+    <tr><td>Port</td><td>1883</td></tr>
+    <tr><td>Client ID</td><td><code>delta-gw-{ID}</code> (auto from MCU UID)</td></tr>
+    <tr><td>Username</td><td>(empty — no auth)</td></tr>
+    <tr><td>Password</td><td>(empty — no auth)</td></tr>
+    <tr><td>Data Topic</td><td><code>delta/gw/{ID}/data</code></td></tr>
+    <tr><td>Alarm Topic</td><td><code>delta/gw/{ID}/alarms</code></td></tr>
+    <tr><td>QoS</td><td>1</td></tr>
+</table>
+
+<h3 id="cfg-modbus">6.4 Modbus Registers</h3>
+<p>Registers are configured via CLI commands. Each register definition specifies the slave address, register address, function code, data type, scaling factor, and a tag name used as the JSON key in telemetry messages.</p>
+<p>Example CLI command to add a register:</p>
+<pre>reg add 1 0 3 0 0.1 voltage</pre>
+<p>This adds: slave 1, register address 0, function code 3 (holding), data type UINT16, scale 0.1, tag "voltage".</p>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 9: CLI REFERENCE -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="cli">7. CLI Reference</h2>
+
+<p>The CLI is accessible via USART1 (CH340 USB-C) at 115200 baud, 8N1. Type <code>help</code> or <code>?</code> for a command list. Commands are case-insensitive.</p>
+
+<table>
+    <tr><th>Command</th><th>Arguments</th><th>Description</th></tr>
+    <tr><td><code>help</code> / <code>?</code></td><td>-</td><td>Show list of available commands</td></tr>
+    <tr><td><code>log</code></td><td><code>on</code> | <code>off</code></td><td>Enable/disable runtime debug logging</td></tr>
+    <tr><td><code>uid</code></td><td>-</td><td>Show MCU unique ID (96-bit), flash size, DBGMCU_IDCODE, and derived device ID</td></tr>
+    <tr><td><code>i2cscan</code></td><td>-</td><td>Scan I2C1 bus for devices (0x01-0x7F)</td></tr>
+    <tr><td><code>show</code></td><td><code>config</code> | <code>regs</code> | <code>alarms</code></td><td>Display current configuration, registers, or alarm definitions</td></tr>
+    <tr><td><code>set</code></td><td><code>&lt;param&gt; &lt;value&gt;</code></td><td>Set a configuration parameter (broker, apn, topic, etc.)</td></tr>
+    <tr><td><code>reg</code></td><td><code>add &lt;slave&gt; &lt;addr&gt; &lt;fc&gt; &lt;type&gt; &lt;scale&gt; &lt;tag&gt;</code></td><td>Add a Modbus register definition</td></tr>
+    <tr><td><code>reg</code></td><td><code>del &lt;index&gt;</code></td><td>Delete a register by index</td></tr>
+    <tr><td><code>reg</code></td><td><code>list</code></td><td>List all configured registers</td></tr>
+    <tr><td><code>alarm</code></td><td><code>add &lt;reg_idx&gt; &lt;bit&gt; &lt;name&gt;</code></td><td>Add an alarm bit definition</td></tr>
+    <tr><td><code>alarm</code></td><td><code>del &lt;index&gt;</code></td><td>Delete an alarm definition</td></tr>
+    <tr><td><code>alarm</code></td><td><code>list</code></td><td>List all alarm bit definitions</td></tr>
+    <tr><td><code>flash</code></td><td><code>&lt;subcommand&gt;</code></td><td>W25Q64 flash operations (read, erase, status)</td></tr>
+    <tr><td><code>save</code></td><td>-</td><td>Save current configuration to internal flash</td></tr>
+    <tr><td><code>reset</code></td><td>-</td><td>Load factory defaults (does NOT save — use <code>save</code> to persist)</td></tr>
+    <tr><td><code>reboot</code></td><td>-</td><td>System reset (NVIC_SystemReset)</td></tr>
+    <tr><td><code>led</code></td><td><code>&lt;0-255&gt;</code></td><td>Set RGB LED brightness (0=off, 255=max)</td></tr>
+    <tr><td><code>at</code></td><td><code>&lt;command&gt;</code></td><td>AT command passthrough to GSM modem (e.g., <code>at AT+CSQ</code>)</td></tr>
+    <tr><td><code>mbtest</code></td><td>-</td><td>Send test Modbus frame on USART3 and print register state</td></tr>
+    <tr><td><code>fwupdate</code></td><td>-</td><td>Enter serial firmware update mode (reboots into bootloader)</td></tr>
+</table>
+
+<div class="note"><strong>Note:</strong> In production builds (PRODUCTION=1), the CLI still works but <code>Debug_Printf</code>/<code>Debug_Print</code> calls are compiled out. Commands like <code>show config</code>, <code>reboot</code>, <code>save</code>, and <code>at</code> remain functional.</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 10: BUILD SYSTEM -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="build">8. Build System</h2>
+
+<h3 id="build-debug">8.1 Debug Build</h3>
+<p>The default build configuration with full logging enabled:</p>
+<ul>
+    <li>Optimization: <code>-O0</code> (no optimization, best for debugging)</li>
+    <li><code>DEBUG_LOG_ENABLED = 1</code> — all Debug_Printf/Debug_Print calls active</li>
+    <li><code>AT_LOG_ENABLED = 1</code> — AT command TX/RX logging active</li>
+    <li>Output: <code>Debug/GATEWAY.bin</code></li>
+</ul>
+
+<h3 id="build-release">8.2 Release / Production Build</h3>
+<p>Steps to create a production build in STM32CubeIDE:</p>
+<ol>
+    <li><strong>Create Release Configuration:</strong> Project &gt; Build Configurations &gt; Manage &gt; New, name "Release", copy from Debug</li>
+    <li><strong>Set Optimization:</strong> MCU GCC Compiler &gt; Optimization &gt; <code>-Os</code> (Optimize for size). Enable <code>-ffunction-sections</code> and <code>-fdata-sections</code></li>
+    <li><strong>Add PRODUCTION Define:</strong> MCU GCC Compiler &gt; Preprocessor &gt; Add: <code>PRODUCTION=1</code>. Remove <code>DEBUG</code> if present.</li>
+    <li><strong>Enable LTO (optional):</strong> Add <code>-flto</code> to both Compiler and Linker miscellaneous flags (saves extra 2-5 KB)</li>
+    <li><strong>Linker GC:</strong> Ensure <code>-Wl,--gc-sections</code> is enabled (discard unused sections)</li>
+    <li><strong>Build:</strong> Set active config to Release, Clean, then Build All</li>
+</ol>
+
+<h3 id="build-flags">8.3 Compiler Flags and Build Configuration</h3>
+
+<h4>build_config.h Behavior</h4>
+<table>
+    <tr><th>Define</th><th>Debug (PRODUCTION=0)</th><th>Release (PRODUCTION=1)</th></tr>
+    <tr><td>DEBUG_LOG_ENABLED</td><td>1 (logs active)</td><td>0 (logs stripped)</td></tr>
+    <tr><td>AT_LOG_ENABLED</td><td>1 (AT trace active)</td><td>0 (AT trace stripped)</td></tr>
+</table>
+
+<h4>Key Compiler Flags</h4>
+<table>
+    <tr><th>Flag</th><th>Purpose</th></tr>
+    <tr><td><code>-Os</code></td><td>Optimize for size (production)</td></tr>
+    <tr><td><code>-O0</code></td><td>No optimization (debug)</td></tr>
+    <tr><td><code>-ffunction-sections</code></td><td>Place each function in its own section for GC</td></tr>
+    <tr><td><code>-fdata-sections</code></td><td>Place each data item in its own section for GC</td></tr>
+    <tr><td><code>-flto</code></td><td>Link-time optimization (optional, extra 2-5 KB saving)</td></tr>
+    <tr><td><code>-Wl,--gc-sections</code></td><td>Remove unused sections at link time</td></tr>
+</table>
+
+<h3 id="build-sizes">8.4 Expected Sizes</h3>
+<table>
+    <tr><th>Build</th><th>Flash Usage</th><th>RAM Usage</th><th>Notes</th></tr>
+    <tr><td>Debug (-O0, logs ON)</td><td>~96 KB</td><td>~19 KB</td><td>Full logging, no optimization</td></tr>
+    <tr><td>Release (-Os, logs OFF)</td><td>~50-55 KB</td><td>~17 KB</td><td>Production deployment</td></tr>
+</table>
+
+<p>The application occupies the flash region 0x08003000 to 0x0801DFFF (108 KB max). The Release build comfortably fits within this limit.</p>
+
+<h4>Memory Map</h4>
+<pre>
+Internal Flash (128 KB total):
+  0x08000000 - 0x08002FFF   Bootloader        (12 KB)
+  0x08003000 - 0x0801DFFF   Application      (108 KB)
+  0x0801E000 - 0x0801E7FF   Config Page A      (2 KB)
+  0x0801E800 - 0x0801EFFF   Config Page B      (2 KB)
+  0x0801F000 - 0x0801FFFF   Reserved           (4 KB)
+
+SRAM (20 KB):
+  0x20000000 - 0x20004FF7   Application data
+  0x20004FF8 - 0x20004FFB   Serial update flag (BL_SERIAL_FLAG_MAGIC)
+  0x20004FFC - 0x20004FFF   OTA reboot flag    (OTA_FLAG_MAGIC)
+</pre>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 11: DEPLOYMENT -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="deployment">9. Deployment</h2>
+
+<h3 id="deploy-serial">9.1 Serial Flashing</h3>
+
+<h4>Method A: Python Tool (fw_update.py)</h4>
+<ol>
+    <li>Connect the device via USB-C (CH340 serial)</li>
+    <li>Open a terminal, issue the <code>fwupdate</code> CLI command</li>
+    <li>The device reboots into bootloader (sets SRAM flag <code>0x5E41A1FF</code> at <code>0x20004FF8</code>)</li>
+    <li>Run on PC: <code>python Tools/fw_update.py --port COMx --file Release/GATEWAY.bin</code></li>
+    <li>The tool sends: SYNC byte (0x7F) &gt; START command (with size + CRC) &gt; DATA chunks (256 bytes each) &gt; VERIFY command</li>
+    <li>Bootloader ACKs each step, writes to internal flash, verifies CRC, then boots the application</li>
+</ol>
+
+<h4>Method B: STM32CubeIDE / ST-Link</h4>
+<p>Use Run &gt; Debug (or Run) in STM32CubeIDE with ST-Link connected to SWD pins. This requires the SWD header to be accessible.</p>
+
+<h4>Serial Update Protocol Summary</h4>
+<table>
+    <tr><th>Command</th><th>Code</th><th>Payload</th><th>Description</th></tr>
+    <tr><td>SYNC</td><td>0x7F</td><td>-</td><td>PC sends to initiate connection</td></tr>
+    <tr><td>START</td><td>0x01</td><td>[size:4][crc32:4]</td><td>Begin update with total size and expected CRC</td></tr>
+    <tr><td>DATA</td><td>0x02</td><td>[len:2][data:N][crc16:2]</td><td>Data chunk (max 256 bytes)</td></tr>
+    <tr><td>VERIFY</td><td>0x03</td><td>-</td><td>Verify complete image and boot</td></tr>
+    <tr><td>ACK</td><td>0x79</td><td>-</td><td>Bootloader acknowledges success</td></tr>
+    <tr><td>NACK</td><td>0x1F</td><td>-</td><td>Bootloader reports error</td></tr>
+</table>
+
+<h3 id="deploy-ota">9.2 OTA Update Procedure</h3>
+<ol>
+    <li>Build the Release firmware binary (<code>Release/GATEWAY.bin</code>)</li>
+    <li>Compute CRC32 of the binary: <code>python -c "import binascii; print(hex(binascii.crc32(open('GATEWAY.bin','rb').read()) &amp; 0xFFFFFFFF))"</code></li>
+    <li>Upload the binary to an HTTPS-accessible URL (e.g., GitHub Pages)</li>
+    <li>Publish OTA command to the device's MQTT command topic:
+<pre>mosquitto_pub -h broker.emqx.io -t "delta/gw/XXXX/cmd" \
+  -m "ota,https://yourusername.github.io/fw/gateway_v1.2.0.bin,55296,0xA1B2C3D4,1.2.0"</pre>
+    </li>
+    <li>Monitor device CLI output for download progress and reboot</li>
+    <li>After reboot, device should reconnect to MQTT and call <code>BL_ConfirmBoot()</code></li>
+</ol>
+
+<h3 id="deploy-hosting">9.3 GitHub Pages Hosting Setup</h3>
+<ol>
+    <li>Create a GitHub repository for firmware hosting (e.g., <code>gateway-firmware</code>)</li>
+    <li>Enable GitHub Pages in repository Settings &gt; Pages &gt; Source: main branch</li>
+    <li>Create a <code>fw/</code> directory and upload firmware binaries</li>
+    <li>The URL will be: <code>https://&lt;username&gt;.github.io/gateway-firmware/fw/GATEWAY_v1.2.0.bin</code></li>
+    <li>Optionally, create a <code>manifest.json</code> for automatic version checking:
+<pre>
+{
+  "latest_version": "1.2.0",
+  "fw_url": "https://username.github.io/gateway-firmware/fw/GATEWAY_v1.2.0.bin",
+  "fw_size": "55296",
+  "fw_crc32": "0xA1B2C3D4"
+}
+</pre>
+    </li>
+</ol>
+
+<div class="note"><strong>Important:</strong> GitHub Pages serves files over HTTPS with proper Content-Length headers, making it suitable for both SIMCom (native HTTPS) and Quectel (SSL socket) download methods.</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 12: TROUBLESHOOTING -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="troubleshooting">10. Troubleshooting</h2>
+
+<h3>10.1 OLED Display Not Working</h3>
+<table>
+    <tr><th>Symptom</th><th>Possible Cause</th><th>Solution</th></tr>
+    <tr><td>Display blank, no response</td><td>Missing I2C pull-up resistors</td><td>Add 4.7k pull-ups on PB6 (SCL) and PB7 (SDA) to 3.3V</td></tr>
+    <tr><td>Display blank, i2cscan finds nothing</td><td>Wrong I2C address or wiring issue</td><td>Check wiring, try address 0x3D (some modules differ)</td></tr>
+    <tr><td>i2cscan finds 0x3C but display blank</td><td>Initialization sequence issue</td><td>Check SSD1306 init timing, add delay after power-up</td></tr>
+</table>
+
+<h3>10.2 AT+QHTTPGET Broken for HTTPS (Quectel EC200U)</h3>
+<p><strong>Problem:</strong> The Quectel EC200U <code>AT+QHTTPGET</code> command fails silently or returns error when the URL uses HTTPS. This is a known firmware limitation on certain EC200U versions.</p>
+<p><strong>Workaround:</strong> The firmware uses <code>AT+QSSLOPEN</code> to establish a raw SSL/TLS socket connection to the HTTPS server, then sends a manual HTTP GET request over the socket. The response is streamed and parsed for Content-Length and body data. This is implemented in <code>Modem_HttpDownloadToFlash()</code> for the Quectel driver.</p>
+
+<h3>10.3 Configuration Not Persisted to Flash</h3>
+<p><strong>Problem:</strong> On first boot, <code>Config_Init()</code> loads defaults but does not call <code>Config_Save()</code>. This is intentional to avoid hanging if the flash pages at 0x0801E000 are not writable (some C8 chips have limited flash beyond 64 KB).</p>
+<p><strong>Solution:</strong></p>
+<ul>
+    <li>After configuring via CLI, explicitly run <code>save</code> command</li>
+    <li>If <code>save</code> hangs or fails, the flash pages may not be accessible on your specific chip</li>
+    <li>Verify with <code>uid</code> command — check if flash size register reports 64 KB or 128 KB</li>
+</ul>
+
+<h3>10.4 GSM Module "RDY" URC Not Received</h3>
+<p><strong>Problem:</strong> The A7670C sends "RDY" URC after boot, but the firmware sometimes misses it (UART not ready in time, or URC arrives during reset hold).</p>
+<p><strong>Solution:</strong> The state machine handles this gracefully — after the BOOT_WAIT timeout (6s), it falls through to AT_PROBE which sends "AT" every 1s for up to 10s. If the modem responds with "OK", connection proceeds normally.</p>
+
+<h3>10.5 AT+CPIN? Fails on First Try</h3>
+<p><strong>Problem:</strong> SIM card is not ready immediately after modem boot. First <code>AT+CPIN?</code> returns ERROR.</p>
+<p><strong>Solution:</strong> The state machine has retry logic for SIM_CHECK state. If <code>AT+CPIN?</code> fails, it waits and retries. The SIM typically becomes ready within 2-5 seconds of modem boot.</p>
+
+<h3>10.6 Bootloader Not Yet Flashed</h3>
+<p><strong>Problem:</strong> The bootloader is a separate project and must be flashed independently at address 0x08000000.</p>
+<p><strong>Solution:</strong></p>
+<ul>
+    <li>Build the bootloader project separately</li>
+    <li>Flash bootloader to 0x08000000 using ST-Link</li>
+    <li>Flash application to 0x08003000</li>
+    <li>Without bootloader, the application must be linked at 0x08000000 (modify linker script ORIGIN)</li>
+</ul>
+
+<h3>10.7 Build Issues</h3>
+<table>
+    <tr><th>Issue</th><th>Cause</th><th>Solution</th></tr>
+    <tr><td>App/ files not compiled</td><td>Source entries not in .cproject</td><td>Re-add App/ subfolders in Project Properties &gt; C/C++ General &gt; Paths and Symbols &gt; Source Location</td></tr>
+    <tr><td>"multiple definition" errors</td><td>Header included in multiple .c files without extern</td><td>Ensure globals are declared extern in headers, defined in one .c file</td></tr>
+    <tr><td>Flash overflow</td><td>Debug build too large</td><td>Switch to Release build (-Os, PRODUCTION=1). Reduce CONFIG_MAX_REGS if needed.</td></tr>
+    <tr><td>Makefile changes lost after rebuild</td><td>CubeIDE auto-regenerates Debug/makefile</td><td>Never edit makefiles manually. Use IDE project settings instead.</td></tr>
+</table>
+
+<h3>10.8 Common AT Command Issues</h3>
+<table>
+    <tr><th>Issue</th><th>AT Command</th><th>Solution</th></tr>
+    <tr><td>No network registration</td><td><code>AT+CEREG?</code> returns 0,0</td><td>Check SIM card, antenna, APN. Wait up to 90s. Verify with <code>at AT+CEREG?</code> in CLI.</td></tr>
+    <tr><td>PDP activation fails</td><td><code>AT+CGACT=1,1</code> errors</td><td>APN may be wrong. Use <code>set apn &lt;your_apn&gt;</code> then <code>save</code> and <code>reboot</code></td></tr>
+    <tr><td>MQTT connect fails</td><td>Various</td><td>Check broker address/port. Use <code>at AT+CSQ</code> to verify signal. Try public broker first.</td></tr>
+</table>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- FOOTER -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<hr>
+<p style="text-align:center; font-size:9pt; color:#666;">
+    GATEWAY Project Documentation | STM32F103C8T6 IoT Gateway | May 2026<br>
+    Generated from source code and project documentation.
+</p>
+
+</body>
+</html>
