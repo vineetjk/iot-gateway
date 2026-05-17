@@ -570,8 +570,8 @@ redirect_retry:
     uint16_t hi = 0;
     bool got_length = false;
 
-    /* Wait for first data to arrive */
-    HAL_Delay(3000);
+    /* No delay — start scanning immediately to avoid ring buffer overflow.
+     * Ring buffer is only 2KB; at 115200 baud data arrives at ~11KB/s. */
 
     /* In push mode, all data streams directly into ring buffer.
      * The module prepends: +QSSLURC: "recv",0,<len>\r\n before each chunk.
@@ -661,7 +661,7 @@ redirect_retry:
                     W25Q_Write(flash_addr + written, page, pi);
                     written += pi;
                     pi = 0;
-                    if (progress_cb && (written % 4096U) < 256U)
+                    if (progress_cb && (written % 8192U) < 256U)
                         progress_cb(written, content_length);
                     if (got_length && written >= content_length) break;
                 }
