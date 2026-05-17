@@ -613,32 +613,12 @@ redirect_retry:
     t = HAL_GetTick();
     uint32_t idle_since = HAL_GetTick();
     uint8_t hdr_end[4] = {0};  /* sliding window for \r\n\r\n */
-    uint32_t empty_since = 0;   /* When buffer last became empty (for URC detection) */
     while ((HAL_GetTick() - t) < 120000U) {
         if (at_tail != at_head) {
             uint8_t byte = at_ring[at_tail];
             at_tail = (at_tail + 1U) % AT_RX_SIZE;
             idle_since = HAL_GetTick();
 
-            /* Skip URC lines between push segments in body mode.
-             * A real segment gap is >5ms empty (at 115200, byte-to-byte is 87µs).
-             * URC format: \r\n+QSSLURC: "recv",0,<len>\r\n */
-            if (in_body && empty_since && (idle_since - empty_since) > 5U) {
-                empty_since = 0;
-                if (byte == '\r' || byte == '\n' || byte == '+') {
-                    /* Skip entire URC line until \n */
-                    uint32_t sk = HAL_GetTick();
-                    while ((HAL_GetTick() - sk) < 2000U) {
-                        if (at_tail != at_head) {
-                            uint8_t sb = at_ring[at_tail];
-                            at_tail = (at_tail + 1U) % AT_RX_SIZE;
-                            if (sb == '\n') break;
-                        } else { HAL_Delay(1); }
-                    }
-                    continue;
-                }
-            }
-            empty_since = 0;
 
             if (!in_body) {
                 /* Store in buffer (for parsing), track total count separately */
@@ -706,8 +686,6 @@ redirect_retry:
                 }
             }
         } else {
-            /* Buffer empty — record when it went empty */
-            if (in_body && !empty_since) empty_since = HAL_GetTick();
             /* If idle too long, connection closed */
             if ((HAL_GetTick() - idle_since) > 15000U) {
                 Debug_Printf("[QEC] Idle timeout hi=%u wr=%lu\r\n", hi, written);
