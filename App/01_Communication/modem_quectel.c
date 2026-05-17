@@ -629,6 +629,28 @@ redirect_retry:
                 hdr_end[3] = byte;
                 if (hi >= 4 && hdr_end[0]=='\r' && hdr_end[1]=='\n'
                             && hdr_end[2]=='\r' && hdr_end[3]=='\n') {
+                    /* Skip any URC line that starts the body push segment.
+                     * Wait for data, then skip if it starts with \r/\n/+ (URC prefix) */
+                    {
+                        uint32_t wt = HAL_GetTick();
+                        while (at_tail == at_head && (HAL_GetTick() - wt) < 5000U)
+                            HAL_Delay(1);
+                        /* Peek first byte */
+                        if (at_tail != at_head) {
+                            uint8_t peek = at_ring[at_tail];
+                            if (peek == '\r' || peek == '\n' || peek == '+') {
+                                /* Skip URC line until \n */
+                                wt = HAL_GetTick();
+                                while ((HAL_GetTick() - wt) < 3000U) {
+                                    if (at_tail != at_head) {
+                                        uint8_t sb = at_ring[at_tail];
+                                        at_tail = (at_tail+1U) % AT_RX_SIZE;
+                                        if (sb == '\n') break;
+                                    } else { HAL_Delay(1); }
+                                }
+                            }
+                        }
+                    }
                     in_body = true;
                     uint16_t cap = (hi-1 < sizeof(hdr_buf)-1) ? hi-1 : sizeof(hdr_buf)-1;
                     hdr_buf[cap] = '\0';
