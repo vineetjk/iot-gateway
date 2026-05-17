@@ -606,14 +606,17 @@ redirect_retry:
     Debug_Print("[QEC] Found HTTP response\r\n");
 
     /* Now read the rest: headers then body, directly from ring buffer.
-     * Data may arrive in multiple push chunks with +QSSLURC lines between them.
-     * We skip any +QSSLURC/+QIURC lines that appear mid-stream. */
+     * In push mode, each TCP segment arrives as:
+     *   +QSSLURC: "recv",0,<len>\r\n<data bytes>
+     * Between segments, ring buffer may be empty briefly.
+     * We must detect and skip these URC lines mid-stream. */
     t = HAL_GetTick();
+    uint32_t idle_since = HAL_GetTick();
     while ((HAL_GetTick() - t) < 120000U) {
         if (at_tail != at_head) {
             uint8_t byte = at_ring[at_tail];
             at_tail = (at_tail + 1U) % AT_RX_SIZE;
-            t = HAL_GetTick();  /* Reset timeout on activity */
+            idle_since = HAL_GetTick();  /* Reset idle timer */
 
             if (!in_body) {
                 if (hi < sizeof(hdr_buf) - 1) hdr_buf[hi++] = (char)byte;
@@ -667,6 +670,11 @@ redirect_retry:
                 }
             }
         } else {
+            /* Buffer empty — if idle too long, connection might be closed */
+            if ((HAL_GetTick() - idle_since) > 15000U) {
+                Debug_Printf("[QEC] Idle timeout hi=%u wr=%lu\r\n", hi, written);
+                break;
+            }
             HAL_Delay(1);
         }
 
