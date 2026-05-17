@@ -32,14 +32,16 @@ static uint8_t s_len = 0;
 #define DEL 0x7F
 
 /* ── Output ──────────────────────────────────────────────────────── */
-void Debug_Print(const char *msg)
+#undef Debug_Print
+#undef Debug_Printf
+void CLI_Print(const char *msg)
 {
     if (!s_huart || !msg) return;
     if (!g_log_enabled && !s_in_dispatch) return;
     HAL_UART_Transmit(s_huart, (uint8_t *)msg, strlen(msg), 500);
 }
 
-void Debug_Printf(const char *fmt, ...)
+void CLI_Printf(const char *fmt, ...)
 {
     if (!s_huart) return;
     if (!g_log_enabled && !s_in_dispatch) return;
@@ -116,7 +118,7 @@ void CLI_Init(UART_HandleTypeDef *h)
 
 static void cmd_help(void)
 {
-    Debug_Print(
+    CLI_Print(
     "\r\n┌──────────────────────────────────────────────────────────────┐\r\n"
     "│  DISPLAY                                                      │\r\n"
     "│    help | show config | show regs                             │\r\n"
@@ -165,39 +167,39 @@ static void cmd_set(char *args)
     while (*p && !isspace((unsigned char)*p) && ki<31) key[ki++]=*p++;
     while (*p &&  isspace((unsigned char)*p)) p++;
     char *val = p;
-    if (!*val) { Debug_Print("[ERR] Missing value\r\n"); return; }
+    if (!*val) { CLI_Print("[ERR] Missing value\r\n"); return; }
 
-    if      (ci_eq(key,"device_id"))        { c->device_id=(uint16_t)atoi(val); Debug_Printf("[OK] device_id=%u\r\n",c->device_id); }
-    else if (ci_eq(key,"device_name"))      { strncpy(c->device_name,val,31); Debug_Printf("[OK] device_name=%s\r\n",c->device_name); }
+    if      (ci_eq(key,"device_id"))        { c->device_id=(uint16_t)atoi(val); CLI_Printf("[OK] device_id=%u\r\n",c->device_id); }
+    else if (ci_eq(key,"device_name"))      { strncpy(c->device_name,val,31); CLI_Printf("[OK] device_name=%s\r\n",c->device_name); }
     else if (ci_eq(key,"modbus_baud"))      {
         uint32_t b=(uint32_t)atol(val);
-        if(b==9600||b==19200||b==38400||b==57600||b==115200){c->modbus_baud=b;Debug_Printf("[OK] baud=%lu\r\n",b);}
-        else Debug_Print("[ERR] Use 9600/19200/38400/57600/115200\r\n");
+        if(b==9600||b==19200||b==38400||b==57600||b==115200){c->modbus_baud=b;CLI_Printf("[OK] baud=%lu\r\n",b);}
+        else CLI_Print("[ERR] Use 9600/19200/38400/57600/115200\r\n");
     }
-    else if (ci_eq(key,"modbus_parity"))    { uint8_t v=(uint8_t)atoi(val); if(v<=2){c->modbus_parity=v;Debug_Printf("[OK] parity=%u\r\n",v);}else Debug_Print("[ERR] 0/1/2\r\n"); }
-    else if (ci_eq(key,"modbus_stopbits"))  { uint8_t v=(uint8_t)atoi(val); if(v==1||v==2){c->modbus_stop_bits=v;Debug_Printf("[OK] stopbits=%u\r\n",v);}else Debug_Print("[ERR] 1 or 2\r\n"); }
-    else if (ci_eq(key,"modbus_timeout"))   { c->modbus_timeout_ms=(uint16_t)atoi(val); Debug_Printf("[OK] timeout=%u ms\r\n",c->modbus_timeout_ms); }
-    else if (ci_eq(key,"poll_interval"))    { c->poll_interval_ms=(uint16_t)atoi(val); Debug_Printf("[OK] poll=%u ms\r\n",c->poll_interval_ms); }
-    else if (ci_eq(key,"publish_interval")) { c->publish_interval_ms=(uint32_t)atol(val); Debug_Printf("[OK] publish=%lu ms\r\n",c->publish_interval_ms); }
-    else if (ci_eq(key,"delta_mode"))       { c->delta_mode=atoi(val)?1:0; Debug_Printf("[OK] delta_mode=%s\r\n",c->delta_mode?"ON":"OFF"); }
-    else if (ci_eq(key,"delta_threshold"))  { c->delta_threshold=(uint16_t)atoi(val); Debug_Printf("[OK] delta_thresh=%u\r\n",c->delta_threshold); }
+    else if (ci_eq(key,"modbus_parity"))    { uint8_t v=(uint8_t)atoi(val); if(v<=2){c->modbus_parity=v;CLI_Printf("[OK] parity=%u\r\n",v);}else CLI_Print("[ERR] 0/1/2\r\n"); }
+    else if (ci_eq(key,"modbus_stopbits"))  { uint8_t v=(uint8_t)atoi(val); if(v==1||v==2){c->modbus_stop_bits=v;CLI_Printf("[OK] stopbits=%u\r\n",v);}else CLI_Print("[ERR] 1 or 2\r\n"); }
+    else if (ci_eq(key,"modbus_timeout"))   { c->modbus_timeout_ms=(uint16_t)atoi(val); CLI_Printf("[OK] timeout=%u ms\r\n",c->modbus_timeout_ms); }
+    else if (ci_eq(key,"poll_interval"))    { c->poll_interval_ms=(uint16_t)atoi(val); CLI_Printf("[OK] poll=%u ms\r\n",c->poll_interval_ms); }
+    else if (ci_eq(key,"publish_interval")) { c->publish_interval_ms=(uint32_t)atol(val); CLI_Printf("[OK] publish=%lu ms\r\n",c->publish_interval_ms); }
+    else if (ci_eq(key,"delta_mode"))       { c->delta_mode=atoi(val)?1:0; CLI_Printf("[OK] delta_mode=%s\r\n",c->delta_mode?"ON":"OFF"); }
+    else if (ci_eq(key,"delta_threshold"))  { c->delta_threshold=(uint16_t)atoi(val); CLI_Printf("[OK] delta_thresh=%u\r\n",c->delta_threshold); }
     else if (ci_eq(key,"modem_type"))      {
         uint8_t v=(uint8_t)atoi(val);
-        if(v<=1){c->modem_type=v;Debug_Printf("[OK] modem=%s — run 'save' then 'reboot'\r\n",v==1?"Quectel EC200U":"SIMCom A7670C");}
-        else Debug_Print("[ERR] modem_type: 0=SIMCom A7670C, 1=Quectel EC200U\r\n");
+        if(v<=1){c->modem_type=v;CLI_Printf("[OK] modem=%s — run 'save' then 'reboot'\r\n",v==1?"Quectel EC200U":"SIMCom A7670C");}
+        else CLI_Print("[ERR] modem_type: 0=SIMCom A7670C, 1=Quectel EC200U\r\n");
     }
-    else if (ci_eq(key,"apn"))             { strncpy(c->apn,val,31); Debug_Printf("[OK] apn=%s\r\n",c->apn); }
-    else if (ci_eq(key,"broker"))          { strncpy(c->broker,val,63); Debug_Printf("[OK] broker=%s\r\n",c->broker); }
-    else if (ci_eq(key,"broker_port"))     { c->broker_port=(uint16_t)atoi(val); Debug_Printf("[OK] port=%u\r\n",c->broker_port); }
-    else if (ci_eq(key,"mqtt_client"))     { strncpy(c->mqtt_client_id,val,31); Debug_Printf("[OK] client=%s\r\n",c->mqtt_client_id); }
-    else if (ci_eq(key,"mqtt_user"))       { strncpy(c->mqtt_user,val,31); Debug_Printf("[OK] user=%s\r\n",c->mqtt_user); }
-    else if (ci_eq(key,"mqtt_pass"))       { strncpy(c->mqtt_pass,val,31); Debug_Print("[OK] pass updated\r\n"); }
-    else if (ci_eq(key,"mqtt_topic"))      { strncpy(c->mqtt_topic,val,63); Debug_Printf("[OK] topic=%s\r\n",c->mqtt_topic); }
-    else if (ci_eq(key,"alarm_topic"))    { strncpy(c->mqtt_alarm_topic,val,63); Debug_Printf("[OK] alarm_topic=%s\r\n",c->mqtt_alarm_topic); }
-    else if (ci_eq(key,"mqtt_qos"))        { uint8_t v=(uint8_t)atoi(val); if(v<=2){c->mqtt_qos=v;Debug_Printf("[OK] qos=%u\r\n",v);}else Debug_Print("[ERR] 0/1/2\r\n"); }
-    else if (ci_eq(key,"ota_enabled"))     { c->ota_enabled=atoi(val)?1:0; Debug_Printf("[OK] ota=%s\r\n",c->ota_enabled?"ON":"OFF"); }
-    else if (ci_eq(key,"ota_url"))         { strncpy(c->ota_manifest_url,val,127); Debug_Printf("[OK] ota_url=%s\r\n",c->ota_manifest_url); }
-    else                                   { Debug_Printf("[ERR] Unknown key: %s\r\n",key); }
+    else if (ci_eq(key,"apn"))             { strncpy(c->apn,val,31); CLI_Printf("[OK] apn=%s\r\n",c->apn); }
+    else if (ci_eq(key,"broker"))          { strncpy(c->broker,val,63); CLI_Printf("[OK] broker=%s\r\n",c->broker); }
+    else if (ci_eq(key,"broker_port"))     { c->broker_port=(uint16_t)atoi(val); CLI_Printf("[OK] port=%u\r\n",c->broker_port); }
+    else if (ci_eq(key,"mqtt_client"))     { strncpy(c->mqtt_client_id,val,31); CLI_Printf("[OK] client=%s\r\n",c->mqtt_client_id); }
+    else if (ci_eq(key,"mqtt_user"))       { strncpy(c->mqtt_user,val,31); CLI_Printf("[OK] user=%s\r\n",c->mqtt_user); }
+    else if (ci_eq(key,"mqtt_pass"))       { strncpy(c->mqtt_pass,val,31); CLI_Print("[OK] pass updated\r\n"); }
+    else if (ci_eq(key,"mqtt_topic"))      { strncpy(c->mqtt_topic,val,63); CLI_Printf("[OK] topic=%s\r\n",c->mqtt_topic); }
+    else if (ci_eq(key,"alarm_topic"))    { strncpy(c->mqtt_alarm_topic,val,63); CLI_Printf("[OK] alarm_topic=%s\r\n",c->mqtt_alarm_topic); }
+    else if (ci_eq(key,"mqtt_qos"))        { uint8_t v=(uint8_t)atoi(val); if(v<=2){c->mqtt_qos=v;CLI_Printf("[OK] qos=%u\r\n",v);}else CLI_Print("[ERR] 0/1/2\r\n"); }
+    else if (ci_eq(key,"ota_enabled"))     { c->ota_enabled=atoi(val)?1:0; CLI_Printf("[OK] ota=%s\r\n",c->ota_enabled?"ON":"OFF"); }
+    else if (ci_eq(key,"ota_url"))         { strncpy(c->ota_manifest_url,val,127); CLI_Printf("[OK] ota_url=%s\r\n",c->ota_manifest_url); }
+    else                                   { CLI_Printf("[ERR] Unknown key: %s\r\n",key); }
 }
 
 static void cmd_reg(char *args)
@@ -209,20 +211,20 @@ static void cmd_reg(char *args)
     while(*p&& isspace((unsigned char)*p)) p++;
 
     if (ci_eq(sub,"list")||ci_eq(sub,"ls")) {
-        if (!c->num_regs){Debug_Print("[INFO] No registers.\r\n");return;}
-        Debug_Print("\r\n IDX  EN  SLAVE  ADDR    FC  TYPE   SCALE    TAG\r\n");
-        Debug_Print(" ---  --  -----  ------  --  -----  -------  ----------------\r\n");
+        if (!c->num_regs){CLI_Print("[INFO] No registers.\r\n");return;}
+        CLI_Print("\r\n IDX  EN  SLAVE  ADDR    FC  TYPE   SCALE    TAG\r\n");
+        CLI_Print(" ---  --  -----  ------  --  -----  -------  ----------------\r\n");
         static const char *tn[]={"U16","I16","U32","I32","F32"};
         for(uint8_t i=0;i<c->num_regs;i++){
             const RegDef_t *r=&c->regs[i];
-            Debug_Printf(" %-3u  %-2u  0x%02X   0x%04X  0x%02X %-5s  %-7.2f  %s\r\n",
+            CLI_Printf(" %-3u  %-2u  0x%02X   0x%04X  0x%02X %-5s  %-7.2f  %s\r\n",
                 i,r->enabled,r->slave_addr,r->reg_addr,r->func_code,
                 r->data_type<=DTYPE_FLOAT32?tn[r->data_type]:"?",r->scale,r->tag);
         }
-        Debug_Printf("\r\n Total: %u/%u\r\n\r\n",c->num_regs,CONFIG_MAX_REGS);
+        CLI_Printf("\r\n Total: %u/%u\r\n\r\n",c->num_regs,CONFIG_MAX_REGS);
 
     } else if (ci_eq(sub,"add")) {
-        if (c->num_regs>=CONFIG_MAX_REGS){Debug_Printf("[ERR] Table full (%u)\r\n",CONFIG_MAX_REGS);return;}
+        if (c->num_regs>=CONFIG_MAX_REGS){CLI_Printf("[ERR] Table full (%u)\r\n",CONFIG_MAX_REGS);return;}
         char t[7][32]={{0}};
         uint8_t tc=0; char *q=p;
         while(tc<7&&*q){
@@ -231,10 +233,10 @@ static void cmd_reg(char *args)
             while(*q&& isspace((unsigned char)*q)) q++;
             if(t[tc][0]) tc++;
         }
-        if(tc<6){Debug_Print("[ERR] Usage: reg add <slave> <addr> <fc> <type> <scale> <tag> [alarm]\r\n");return;}
+        if(tc<6){CLI_Print("[ERR] Usage: reg add <slave> <addr> <fc> <type> <scale> <tag> [alarm]\r\n");return;}
 
         uint8_t fc=(uint8_t)atoi(t[2]);
-        if(fc!=3&&fc!=4){Debug_Print("[ERR] fc must be 3 or 4\r\n");return;}
+        if(fc!=3&&fc!=4){CLI_Print("[ERR] fc must be 3 or 4\r\n");return;}
 
         RegDataType_t dt;
         if     (ci_eq(t[3],"u16")) dt=DTYPE_UINT16;
@@ -242,7 +244,7 @@ static void cmd_reg(char *args)
         else if(ci_eq(t[3],"u32")) dt=DTYPE_UINT32;
         else if(ci_eq(t[3],"i32")) dt=DTYPE_INT32;
         else if(ci_eq(t[3],"f32")) dt=DTYPE_FLOAT32;
-        else{Debug_Print("[ERR] type: u16 i16 u32 i32 f32\r\n");return;}
+        else{CLI_Print("[ERR] type: u16 i16 u32 i32 f32\r\n");return;}
 
         RegDef_t *r=&c->regs[c->num_regs];
         r->slave_addr=(uint8_t)atoi(t[0]);
@@ -254,35 +256,35 @@ static void cmd_reg(char *args)
         r->enabled=1;
         r->is_alarm=(tc>=7 && ci_eq(t[6],"alarm"))?1:0;
         c->num_regs++;
-        Debug_Printf("[OK] reg[%u] added: 0x%02X:0x%04X fc=%u %s scale=%.3f tag=%s%s\r\n",
+        CLI_Printf("[OK] reg[%u] added: 0x%02X:0x%04X fc=%u %s scale=%.3f tag=%s%s\r\n",
             c->num_regs-1,r->slave_addr,r->reg_addr,r->func_code,t[3],r->scale,r->tag,
             r->is_alarm?" [ALARM]":"");
 
     } else if (ci_eq(sub,"del")||ci_eq(sub,"delete")) {
         uint8_t idx=(uint8_t)atoi(p);
-        if(idx>=c->num_regs){Debug_Printf("[ERR] Index %u out of range\r\n",idx);return;}
+        if(idx>=c->num_regs){CLI_Printf("[ERR] Index %u out of range\r\n",idx);return;}
         for(uint8_t i=idx;i<c->num_regs-1;i++) c->regs[i]=c->regs[i+1];
         memset(&c->regs[--c->num_regs],0,sizeof(RegDef_t));
-        Debug_Printf("[OK] reg[%u] deleted. Total=%u\r\n",idx,c->num_regs);
+        CLI_Printf("[OK] reg[%u] deleted. Total=%u\r\n",idx,c->num_regs);
 
     } else if (ci_eq(sub,"enable")) {
         char is[8]={0},es[4]={0};
         sscanf(p,"%7s %3s",is,es);
         uint8_t idx=(uint8_t)atoi(is),en=atoi(es)?1:0;
-        if(idx>=c->num_regs){Debug_Printf("[ERR] Index %u out of range\r\n",idx);return;}
+        if(idx>=c->num_regs){CLI_Printf("[ERR] Index %u out of range\r\n",idx);return;}
         c->regs[idx].enabled=en;
-        Debug_Printf("[OK] reg[%u] %s\r\n",idx,en?"enabled":"disabled");
+        CLI_Printf("[OK] reg[%u] %s\r\n",idx,en?"enabled":"disabled");
 
     } else if (ci_eq(sub,"alarm")) {
         char is[8]={0},es[4]={0};
         sscanf(p,"%7s %3s",is,es);
         uint8_t idx=(uint8_t)atoi(is),al=atoi(es)?1:0;
-        if(idx>=c->num_regs){Debug_Printf("[ERR] Index %u out of range\r\n",idx);return;}
+        if(idx>=c->num_regs){CLI_Printf("[ERR] Index %u out of range\r\n",idx);return;}
         c->regs[idx].is_alarm=al;
-        Debug_Printf("[OK] reg[%u] %s\r\n",idx,al?"marked as ALARM":"marked as PARAM");
+        CLI_Printf("[OK] reg[%u] %s\r\n",idx,al?"marked as ALARM":"marked as PARAM");
 
     } else {
-        Debug_Printf("[ERR] Unknown: '%s'. Use add/del/enable/alarm/list\r\n",sub);
+        CLI_Printf("[ERR] Unknown: '%s'. Use add/del/enable/alarm/list\r\n",sub);
     }
 }
 
@@ -298,36 +300,36 @@ static void cmd_flash(char *args)
     if (ci_eq(sub, "id")) {
         uint32_t id = 0;
         W25Q_ReadID(&id);
-        Debug_Printf("[FLASH] JEDEC ID: 0x%06lX", id);
+        CLI_Printf("[FLASH] JEDEC ID: 0x%06lX", id);
         uint8_t mfr = (id >> 16) & 0xFF;
         uint8_t cap = id & 0xFF;
         const char *mfr_name = mfr==0xEF ? "Winbond" :
                                mfr==0x20 ? "XMC" :
                                mfr==0xC8 ? "GigaDevice" : "Unknown";
         if (cap >= 0x14 && cap <= 0x18)
-            Debug_Printf("  (%s %uMbit)\r\n", mfr_name,
+            CLI_Printf("  (%s %uMbit)\r\n", mfr_name,
                          (unsigned)(1U << (cap - 0x10)) / 8 * 8);
         else
-            Debug_Printf("  (%s, cap=0x%02X)\r\n", mfr_name, cap);
+            CLI_Printf("  (%s, cap=0x%02X)\r\n", mfr_name, cap);
 
     } else if (ci_eq(sub, "test")) {
         /* Full write-read-verify test on sector 0 (first 4KB) */
-        Debug_Print("[FLASH] === SPI Flash Test ===\r\n");
+        CLI_Print("[FLASH] === SPI Flash Test ===\r\n");
 
         /* Step 1: Read JEDEC ID */
         uint32_t id = 0;
         W25Q_ReadID(&id);
-        Debug_Printf("[FLASH] JEDEC ID: 0x%06lX\r\n", id);
+        CLI_Printf("[FLASH] JEDEC ID: 0x%06lX\r\n", id);
         uint8_t tmfr = (id >> 16) & 0xFF;
         if (tmfr != 0xEF && tmfr != 0x20 && tmfr != 0xC8) {
-            Debug_Print("[FLASH] FAIL — unknown chip. Check wiring:\r\n");
-            Debug_Print("        PA5=SCK  PA6=MISO  PA7=MOSI  PA8=CS\r\n");
+            CLI_Print("[FLASH] FAIL — unknown chip. Check wiring:\r\n");
+            CLI_Print("        PA5=SCK  PA6=MISO  PA7=MOSI  PA8=CS\r\n");
             return;
         }
-        Debug_Print("[FLASH] PASS — chip detected\r\n");
+        CLI_Print("[FLASH] PASS — chip detected\r\n");
 
         /* Step 2: Erase sector 0 */
-        Debug_Print("[FLASH] Erasing sector 0 (0x000000)...\r\n");
+        CLI_Print("[FLASH] Erasing sector 0 (0x000000)...\r\n");
         W25Q_EraseSector(0x000000);
 
         /* Step 3: Verify erase — all bytes should be 0xFF */
@@ -337,12 +339,12 @@ static void cmd_flash(char *args)
         for (uint16_t i = 0; i < 256; i++) {
             if (buf[i] != 0xFF) { erase_ok = false; break; }
         }
-        Debug_Printf("[FLASH] Erase verify: %s\r\n", erase_ok ? "PASS" : "FAIL");
+        CLI_Printf("[FLASH] Erase verify: %s\r\n", erase_ok ? "PASS" : "FAIL");
         if (!erase_ok) return;
 
         /* Step 4: Write a test pattern */
         for (uint16_t i = 0; i < 256; i++) buf[i] = (uint8_t)(i & 0xFF);
-        Debug_Print("[FLASH] Writing 256-byte pattern...\r\n");
+        CLI_Print("[FLASH] Writing 256-byte pattern...\r\n");
         W25Q_WritePage(0x000000, buf, 256);
 
         /* Step 5: Read back and verify */
@@ -359,16 +361,16 @@ static void cmd_flash(char *args)
             }
         }
         if (write_ok)
-            Debug_Print("[FLASH] Write+Read verify: PASS\r\n");
+            CLI_Print("[FLASH] Write+Read verify: PASS\r\n");
         else
-            Debug_Printf("[FLASH] Write+Read verify: FAIL at byte %u "
+            CLI_Printf("[FLASH] Write+Read verify: FAIL at byte %u "
                          "(wrote 0x%02X, read 0x%02X)\r\n",
                          fail_at, (uint8_t)(fail_at & 0xFF), rbuf[fail_at]);
 
         /* Step 6: Clean up — erase sector again */
         W25Q_EraseSector(0x000000);
-        Debug_Print("[FLASH] Sector 0 cleaned up\r\n");
-        Debug_Print("[FLASH] === Test complete ===\r\n");
+        CLI_Print("[FLASH] Sector 0 cleaned up\r\n");
+        CLI_Print("[FLASH] === Test complete ===\r\n");
 
     } else if (ci_eq(sub, "dump")) {
         /* dump <addr> [len] — hex dump flash contents */
@@ -379,19 +381,19 @@ static void cmd_flash(char *args)
 
         static uint8_t dbuf[256];
         W25Q_Read(addr, dbuf, len);
-        Debug_Printf("[FLASH] Dump 0x%06lX (%u bytes):\r\n", addr, len);
+        CLI_Printf("[FLASH] Dump 0x%06lX (%u bytes):\r\n", addr, len);
         for (uint16_t i = 0; i < len; i += 16) {
-            Debug_Printf("  %06lX: ", addr + i);
+            CLI_Printf("  %06lX: ", addr + i);
             for (uint8_t j = 0; j < 16 && (i + j) < len; j++)
-                Debug_Printf("%02X ", dbuf[i + j]);
-            Debug_Print("\r\n");
+                CLI_Printf("%02X ", dbuf[i + j]);
+            CLI_Print("\r\n");
         }
 
     } else {
-        Debug_Print("Usage:\r\n");
-        Debug_Print("  flash id          — read JEDEC chip ID\r\n");
-        Debug_Print("  flash test        — full erase/write/read self-test\r\n");
-        Debug_Print("  flash dump <addr> [len]  — hex dump (max 256)\r\n");
+        CLI_Print("Usage:\r\n");
+        CLI_Print("  flash id          — read JEDEC chip ID\r\n");
+        CLI_Print("  flash test        — full erase/write/read self-test\r\n");
+        CLI_Print("  flash dump <addr> [len]  — hex dump (max 256)\r\n");
     }
 }
 
@@ -406,19 +408,19 @@ static void cmd_alarm(char *args)
     while (*p &&  isspace((unsigned char)*p)) p++;
 
     if (ci_eq(sub, "list") || ci_eq(sub, "ls")) {
-        if (!c->num_alarm_bits) { Debug_Print("[INFO] No alarm bits defined.\r\n"); return; }
-        Debug_Print("\r\n IDX  REG  BIT  NAME\r\n");
-        Debug_Print(" ---  ---  ---  -------\r\n");
+        if (!c->num_alarm_bits) { CLI_Print("[INFO] No alarm bits defined.\r\n"); return; }
+        CLI_Print("\r\n IDX  REG  BIT  NAME\r\n");
+        CLI_Print(" ---  ---  ---  -------\r\n");
         for (uint8_t i = 0; i < c->num_alarm_bits; i++) {
             const AlarmBitDef_t *a = &c->alarm_bits[i];
-            Debug_Printf(" %-3u  %-3u  %-3u  %s\r\n",
+            CLI_Printf(" %-3u  %-3u  %-3u  %s\r\n",
                          i, a->reg_idx, a->bit_pos, a->name);
         }
-        Debug_Printf("\r\n Total: %u/%u\r\n\r\n", c->num_alarm_bits, CONFIG_MAX_ALARM_BITS);
+        CLI_Printf("\r\n Total: %u/%u\r\n\r\n", c->num_alarm_bits, CONFIG_MAX_ALARM_BITS);
 
     } else if (ci_eq(sub, "add")) {
         if (c->num_alarm_bits >= CONFIG_MAX_ALARM_BITS) {
-            Debug_Printf("[ERR] Table full (%u)\r\n", CONFIG_MAX_ALARM_BITS);
+            CLI_Printf("[ERR] Table full (%u)\r\n", CONFIG_MAX_ALARM_BITS);
             return;
         }
         /* Parse: alarm add <reg_idx> <bit> <name> */
@@ -432,23 +434,23 @@ static void cmd_alarm(char *args)
             if (t[tc][0]) tc++;
         }
         if (tc < 3) {
-            Debug_Print("[ERR] Usage: alarm add <reg_idx> <bit> <name>\r\n");
-            Debug_Print("      example: alarm add 5 0 OV\r\n");
+            CLI_Print("[ERR] Usage: alarm add <reg_idx> <bit> <name>\r\n");
+            CLI_Print("      example: alarm add 5 0 OV\r\n");
             return;
         }
 
         uint8_t ri = (uint8_t)atoi(t[0]);
         uint8_t bp = (uint8_t)atoi(t[1]);
         if (ri >= c->num_regs) {
-            Debug_Printf("[ERR] reg_idx %u out of range (max %u)\r\n", ri, c->num_regs - 1);
+            CLI_Printf("[ERR] reg_idx %u out of range (max %u)\r\n", ri, c->num_regs - 1);
             return;
         }
         if (!c->regs[ri].is_alarm) {
-            Debug_Printf("[ERR] reg[%u] is not an alarm register. Use 'reg alarm %u 1' first\r\n", ri, ri);
+            CLI_Printf("[ERR] reg[%u] is not an alarm register. Use 'reg alarm %u 1' first\r\n", ri, ri);
             return;
         }
         if (bp > 15) {
-            Debug_Print("[ERR] bit must be 0-15\r\n");
+            CLI_Print("[ERR] bit must be 0-15\r\n");
             return;
         }
 
@@ -458,25 +460,25 @@ static void cmd_alarm(char *args)
         strncpy(a->name, t[2], CONFIG_ALARM_NAME_LEN - 1);
         a->name[CONFIG_ALARM_NAME_LEN - 1] = '\0';
         c->num_alarm_bits++;
-        Debug_Printf("[OK] alarm[%u] added: reg[%u] bit %u = \"%s\"\r\n",
+        CLI_Printf("[OK] alarm[%u] added: reg[%u] bit %u = \"%s\"\r\n",
                      c->num_alarm_bits - 1, ri, bp, a->name);
 
     } else if (ci_eq(sub, "del") || ci_eq(sub, "delete")) {
         uint8_t idx = (uint8_t)atoi(p);
         if (idx >= c->num_alarm_bits) {
-            Debug_Printf("[ERR] Index %u out of range\r\n", idx);
+            CLI_Printf("[ERR] Index %u out of range\r\n", idx);
             return;
         }
         for (uint8_t i = idx; i < c->num_alarm_bits - 1; i++)
             c->alarm_bits[i] = c->alarm_bits[i + 1];
         memset(&c->alarm_bits[--c->num_alarm_bits], 0, sizeof(AlarmBitDef_t));
-        Debug_Printf("[OK] alarm[%u] deleted. Total=%u\r\n", idx, c->num_alarm_bits);
+        CLI_Printf("[OK] alarm[%u] deleted. Total=%u\r\n", idx, c->num_alarm_bits);
 
     } else {
-        Debug_Print("Usage:\r\n");
-        Debug_Print("  alarm add <reg_idx> <bit> <name>  — define alarm bit\r\n");
-        Debug_Print("  alarm del <idx>                   — remove alarm bit\r\n");
-        Debug_Print("  alarm list                        — show all alarm bits\r\n");
+        CLI_Print("Usage:\r\n");
+        CLI_Print("  alarm add <reg_idx> <bit> <name>  — define alarm bit\r\n");
+        CLI_Print("  alarm del <idx>                   — remove alarm bit\r\n");
+        CLI_Print("  alarm list                        — show all alarm bits\r\n");
     }
 }
 
@@ -500,9 +502,9 @@ static void dispatch(char *line)
         extern UART_HandleTypeDef huart3;
         uint8_t test[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x01, 0x84, 0x0A};
 
-        Debug_Printf("[MBTEST] USART3 BRR=0x%04X (expect 0x1D4C for 9600@72MHz)\r\n",
+        CLI_Printf("[MBTEST] USART3 BRR=0x%04X (expect 0x1D4C for 9600@72MHz)\r\n",
                      (unsigned)USART3->BRR);
-        Debug_Printf("[MBTEST] USART3 CR1=0x%04X SR=0x%04X\r\n",
+        CLI_Printf("[MBTEST] USART3 CR1=0x%04X SR=0x%04X\r\n",
                      (unsigned)USART3->CR1, (unsigned)USART3->SR);
 
         /* Force DE high */
@@ -511,23 +513,23 @@ static void dispatch(char *line)
         HAL_StatusTypeDef st = HAL_UART_Transmit(&huart3, test, 8, 1000);
         HAL_Delay(2);
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-        Debug_Printf("[MBTEST] Sent 8 bytes, HAL status=%d\r\n", (int)st);
+        CLI_Printf("[MBTEST] Sent 8 bytes, HAL status=%d\r\n", (int)st);
     }
     else if (ci_eq(cmd,"uid")) {
         /* Try standard UID address */
         uint32_t u0 = *(volatile uint32_t *)(0x1FFFF7E8UL);
         uint32_t u1 = *(volatile uint32_t *)(0x1FFFF7ECUL);
         uint32_t u2 = *(volatile uint32_t *)(0x1FFFF7F0UL);
-        Debug_Printf("[UID] @0x1FFFF7E8: %08lX %08lX %08lX\r\n",
+        CLI_Printf("[UID] @0x1FFFF7E8: %08lX %08lX %08lX\r\n",
                      (unsigned long)u0, (unsigned long)u1, (unsigned long)u2);
 
         /* Check flash size register */
         uint16_t flash_kb = *(volatile uint16_t *)(0x1FFFF7E0UL);
-        Debug_Printf("[UID] Flash size reg: %u KB\r\n", flash_kb);
+        CLI_Printf("[UID] Flash size reg: %u KB\r\n", flash_kb);
 
         /* DBGMCU_IDCODE — reveals real chip identity */
         uint32_t idcode = *(volatile uint32_t *)(0xE0042000UL);
-        Debug_Printf("[UID] DBGMCU_IDCODE=0x%08lX (DEV_ID=0x%03lX REV=0x%04lX)\r\n",
+        CLI_Printf("[UID] DBGMCU_IDCODE=0x%08lX (DEV_ID=0x%03lX REV=0x%04lX)\r\n",
                      (unsigned long)idcode,
                      (unsigned long)(idcode & 0xFFFUL),
                      (unsigned long)((idcode >> 16) & 0xFFFFUL));
@@ -535,38 +537,38 @@ static void dispatch(char *line)
         /* Derive ID */
         uint32_t h  = u0 ^ u1 ^ u2;
         uint16_t id = (uint16_t)((h ^ (h >> 16)) & 0xFFFFU);
-        Debug_Printf("[UID] Folded ID=0x%04X  Config device_id=0x%04X\r\n",
+        CLI_Printf("[UID] Folded ID=0x%04X  Config device_id=0x%04X\r\n",
                      id, Config_Get()->device_id);
 
         if (u0 == 0 && u1 == 0 && u2 == 0)
-            Debug_Print("[UID] WARNING: All zeros — likely clone chip. Use 'set device_id <n>' manually.\r\n");
+            CLI_Print("[UID] WARNING: All zeros — likely clone chip. Use 'set device_id <n>' manually.\r\n");
     }
     else if (ci_eq(cmd,"i2cscan")) {
         extern I2C_HandleTypeDef hi2c1;
-        Debug_Print("[I2C] Scanning...\r\n");
+        CLI_Print("[I2C] Scanning...\r\n");
         uint8_t found=0;
         for (uint8_t a=1; a<128; a++) {
             if (HAL_I2C_IsDeviceReady(&hi2c1, a<<1, 2, 10) == HAL_OK) {
-                Debug_Printf("  Found device at 0x%02X\r\n", a);
+                CLI_Printf("  Found device at 0x%02X\r\n", a);
                 found++;
             }
         }
-        if (!found) Debug_Print("  No devices found! Check wiring/pullups.\r\n");
-        else Debug_Printf("  %u device(s) found.\r\n", found);
+        if (!found) CLI_Print("  No devices found! Check wiring/pullups.\r\n");
+        else CLI_Printf("  %u device(s) found.\r\n", found);
     }
     else if (ci_eq(cmd,"show")) {
         if     (strstr(p,"config")) Config_Print();
         else if(strstr(p,"alarm"))  cmd_alarm((char*)"list");
         else if(strstr(p,"reg"))    cmd_reg((char*)"list");
-        else    Debug_Print("[ERR] show config | show regs | show alarms\r\n");
+        else    CLI_Print("[ERR] show config | show regs | show alarms\r\n");
     }
     else if (ci_eq(cmd,"set"))    cmd_set(p);
     else if (ci_eq(cmd,"reg"))    cmd_reg(p);
     else if (ci_eq(cmd,"alarm"))  cmd_alarm(p);
     else if (ci_eq(cmd,"flash"))  cmd_flash(p);
-    else if (ci_eq(cmd,"save"))   { Debug_Print("[CFG] Saving...\r\n"); Config_Save(); }
-    else if (ci_eq(cmd,"reset"))  { Config_LoadDefaults(); Debug_Print("[OK] Defaults loaded (not saved)\r\n"); }
-    else if (ci_eq(cmd,"reboot")) { Debug_Print("[SYS] Rebooting...\r\n"); HAL_Delay(500); NVIC_SystemReset(); }
+    else if (ci_eq(cmd,"save"))   { CLI_Print("[CFG] Saving...\r\n"); Config_Save(); }
+    else if (ci_eq(cmd,"reset"))  { Config_LoadDefaults(); CLI_Print("[OK] Defaults loaded (not saved)\r\n"); }
+    else if (ci_eq(cmd,"reboot")) { CLI_Print("[SYS] Rebooting...\r\n"); HAL_Delay(500); NVIC_SystemReset(); }
     else if (ci_eq(cmd,"led")) {
         if (!*p) {
             cli_printf("[LED] Brightness: %u/255\r\n", RGB_GetBrightness());
@@ -596,12 +598,12 @@ static void dispatch(char *line)
         }
     }
     else if (ci_eq(cmd,"fwupdate")) {
-        Debug_Print("[SYS] Entering serial firmware update mode...\r\n");
-        Debug_Print("[SYS] Run 'python fw_update.py' on PC now.\r\n");
+        CLI_Print("[SYS] Entering serial firmware update mode...\r\n");
+        CLI_Print("[SYS] Run 'python fw_update.py' on PC now.\r\n");
         HAL_Delay(500);
         BL_TriggerSerialUpdate();  /* does not return */
     }
-    else    Debug_Printf("[ERR] Unknown command '%s'. Type 'help'\r\n",cmd);
+    else    CLI_Printf("[ERR] Unknown command '%s'. Type 'help'\r\n",cmd);
 }
 
 /* ── Process (call in main loop) ─────────────────────────────────── */

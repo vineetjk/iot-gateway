@@ -27,13 +27,17 @@ void CLI_RxCallback(UART_HandleTypeDef *huart);
 /* Log control — logs OFF by default, enable with "log on" CLI command */
 extern volatile uint8_t g_log_enabled;
 
+/* Always-available print (used internally by CLI for responses) */
+void CLI_Print(const char *msg);
+void CLI_Printf(const char *fmt, ...);
+
 #if DEBUG_LOG_ENABLED
-  void Debug_Print(const char *msg);
-  void Debug_Printf(const char *fmt, ...);
+  #define Debug_Print(msg)        CLI_Print(msg)
+  #define Debug_Printf(fmt, ...)  CLI_Printf(fmt, ##__VA_ARGS__)
 #else
-  /* Strip all debug prints in production — saves ~13KB flash (format strings) */
-  #define Debug_Print(msg)       ((void)0)
-  #define Debug_Printf(fmt, ...) ((void)0)
+  /* Production: strip all debug prints — saves ~13KB flash (format strings) */
+  #define Debug_Print(msg)        ((void)0)
+  #define Debug_Printf(fmt, ...)  ((void)0)
 #endif
 
 #endif /* DEBUG_CLI_H */
