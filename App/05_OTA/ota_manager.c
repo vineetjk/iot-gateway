@@ -230,18 +230,21 @@ static OtaResult_t ota_download(const char *fw_url, uint32_t fw_size,
     uint32_t written = 0;
     GsmResult_t r = Modem_HttpDownloadToFlash(fw_url, SPI_FLASH_SLOT_A_ADDR,
                                               fw_size, &written, ota_progress);
-    if (r != GSM_OK || written < fw_size) {
+    if (r != GSM_OK) {
         Debug_Printf("[OTA] Download fail: %lu/%lu\r\n", written, fw_size);
         Display_ShowError(ERR_OTA_DOWNLOAD);
         return OTA_RESULT_DOWNLOAD_FAIL;
     }
+    /* Use actual written size (from Content-Length) for CRC verify */
+    uint32_t verify_size = written;
+    Debug_Printf("[OTA] Downloaded %lu bytes, verifying CRC...\r\n", verify_size);
 
     /* CRC verify by reading back from flash */
     uint32_t crc_run = 0xFFFFFFFFUL;
     static uint8_t vbuf[256];
     uint32_t voff = 0;
-    while (voff < fw_size) {
-        uint16_t vlen = ((fw_size - voff) > 256U) ? 256U : (uint16_t)(fw_size - voff);
+    while (voff < verify_size) {
+        uint16_t vlen = ((verify_size - voff) > 256U) ? 256U : (uint16_t)(verify_size - voff);
         W25Q_Read(SPI_FLASH_SLOT_A_ADDR + voff, vbuf, vlen);
         const uint8_t *p = vbuf; uint32_t n = vlen;
         while (n--) { crc_run ^= *p++; for (uint8_t b = 0; b < 8; b++) crc_run = (crc_run & 1) ? ((crc_run >> 1) ^ 0xEDB88320UL) : (crc_run >> 1); }
@@ -259,7 +262,7 @@ static OtaResult_t ota_download(const char *fw_url, uint32_t fw_size,
     OtaMeta_t meta; memset(&meta, 0, sizeof(meta));
     meta.magic           = OTA_META_MAGIC;
     meta.fw_version      = ver;
-    meta.fw_size         = fw_size;
+    meta.fw_size         = verify_size;
     meta.fw_crc32        = crc_run;
     meta.slot_addr       = SPI_FLASH_SLOT_A_ADDR;
     meta.status          = OTA_STATUS_DOWNLOADED;

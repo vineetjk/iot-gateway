@@ -667,10 +667,17 @@ redirect_retry:
                 }
             } else {
                 /* Body byte → flash page */
-                page[pi++] = byte;
-                if (pi >= 256U) {
-                    W25Q_Write(flash_addr + written, page, pi);
-                    written += pi;
+                if (!got_length || written + pi < content_length) {
+                    page[pi++] = byte;
+                }
+                if (pi >= 256U || (got_length && written + pi >= content_length)) {
+                    uint16_t to_write = pi;
+                    if (got_length && written + to_write > content_length)
+                        to_write = (uint16_t)(content_length - written);
+                    if (to_write > 0) {
+                        W25Q_Write(flash_addr + written, page, to_write);
+                        written += to_write;
+                    }
                     pi = 0;
                     if (progress_cb && (written % 8192U) < 256U)
                         progress_cb(written, content_length);
@@ -698,9 +705,8 @@ redirect_retry:
     AT_Cmd(close_cmd, "OK", 5000U);
     *out_written = written;
     if (progress_cb) progress_cb(written, got_length ? content_length : written);
-    Debug_Printf("[QEC] Done: %lu bytes\r\n", written);
-    return (written > 0 && (!got_length || written >= content_length))
-           ? GSM_OK : GSM_ERR_HTTP_FAIL;
+    Debug_Printf("[QEC] Done: %lu/%lu bytes\r\n", written, content_length);
+    return (got_length && written >= content_length) ? GSM_OK : GSM_ERR_HTTP_FAIL;
 }
 
 /* Legacy range — fallback (not used for OTA) */
