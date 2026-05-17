@@ -612,6 +612,7 @@ redirect_retry:
      * We must detect and skip these URC lines mid-stream. */
     t = HAL_GetTick();
     uint32_t idle_since = HAL_GetTick();
+    uint8_t hdr_end[4] = {0};  /* sliding window for \r\n\r\n */
     while ((HAL_GetTick() - t) < 120000U) {
         if (at_tail != at_head) {
             uint8_t byte = at_ring[at_tail];
@@ -619,11 +620,18 @@ redirect_retry:
             idle_since = HAL_GetTick();  /* Reset idle timer */
 
             if (!in_body) {
-                if (hi < sizeof(hdr_buf) - 1) hdr_buf[hi++] = (char)byte;
-                if (hi >= 4 && strstr(hdr_buf + (hi > 20 ? hi - 20 : 0), "\r\n\r\n")) {
+                /* Store in buffer (for parsing), track total count separately */
+                if (hi < sizeof(hdr_buf) - 1) hdr_buf[hi] = (char)byte;
+                hi++;
+                /* Sliding window \r\n\r\n detection (works even if hdr_buf full) */
+                hdr_end[0]=hdr_end[1]; hdr_end[1]=hdr_end[2]; hdr_end[2]=hdr_end[3];
+                hdr_end[3] = byte;
+                if (hi >= 4 && hdr_end[0]=='\r' && hdr_end[1]=='\n'
+                            && hdr_end[2]=='\r' && hdr_end[3]=='\n') {
                     in_body = true;
-                    hdr_buf[hi] = '\0';
-                    Debug_Printf("[QEC] HDR: %.150s\r\n", hdr_buf);
+                    uint16_t cap = (hi-1 < sizeof(hdr_buf)-1) ? hi-1 : sizeof(hdr_buf)-1;
+                    hdr_buf[cap] = '\0';
+                    Debug_Printf("[QEC] Hdrs %u bytes\r\n", hi);
                     /* Parse Content-Length */
                     char *cl = strstr(hdr_buf, "Content-Length:");
                     if (!cl) cl = strstr(hdr_buf, "content-length:");
