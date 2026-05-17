@@ -501,13 +501,13 @@ redirect_retry:
         AT_Cmd("AT+QSSLCFG=\"ciphersuite\",0,0xFFFF", "OK", 2000U);
         AT_Cmd("AT+QSSLCFG=\"seclevel\",0,0", "OK", 2000U);
         AT_Cmd("AT+QSSLCFG=\"sni\",0,1", "OK", 2000U);
-        /* Open SSL socket (push mode = 1) */
+        /* Open SSL socket (buffer mode = 0) */
         snprintf(cmd, AT_WORK_BUF_SIZE,
-                 "AT+QSSLOPEN=1,0,0,\"%s\",%u,1", host, port);
+                 "AT+QSSLOPEN=1,0,0,\"%s\",%u,0", host, port);
     } else {
-        /* Open plain TCP socket (push mode = 1) */
+        /* Open plain TCP socket (buffer mode = 0) */
         snprintf(cmd, AT_WORK_BUF_SIZE,
-                 "AT+QIOPEN=1,0,\"TCP\",\"%s\",%u,0,1", host, port);
+                 "AT+QIOPEN=1,0,\"TCP\",\"%s\",%u,0,0", host, port);
     }
 
     AT_RxFlush();
@@ -554,12 +554,14 @@ redirect_retry:
             return GSM_ERR_HTTP_FAIL;
         }
     }
-    Debug_Print("[QEC] GET sent, reading response...\r\n");
+    Debug_Print("[QEC] GET sent, reading...\r\n");
 
-    /* Push mode: data arrives directly in ring buffer after URC line.
-     * Format: +QSSLURC: "recv",0,<len>\r\n<raw data bytes>
-     * We wait for "recv", skip the URC line, then read raw HTTP. */
+    /* BUFFER MODE: read data using AT+QSSLRECV / AT+QIRD.
+     * Each call returns CLEAN data with no URC contamination.
+     * Response: +QSSLRECV: <len>\r\n<data>\r\nOK */
     const char *close_cmd = ssl ? "AT+QSSLCLOSE=0" : "AT+QICLOSE=0";
+    const char *recv_cmd  = ssl ? "AT+QSSLRECV=0,1024" : "AT+QIRD=0,1024";
+    const char *recv_pfx  = ssl ? "+QSSLRECV:" : "+QIRD:";
     uint32_t content_length = expected_size;
     uint8_t page[256];
     uint16_t pi = 0;
@@ -569,203 +571,131 @@ redirect_retry:
     char hdr_buf[512] = {0};
     uint16_t hi = 0;
     bool got_length = false;
+    uint8_t hdr_end[4] = {0};
+    uint8_t empty_count = 0;
 
-    /* No delay — start scanning immediately to avoid ring buffer overflow.
-     * Ring buffer is only 2KB; at 115200 baud data arrives at ~11KB/s. */
+    /* Wait for data arrival notification */
+    AT_Wait("recv", 30000U);
+    HAL_Delay(500);
+    AT_RxFlush();
 
-    /* In push mode, all data streams directly into ring buffer.
-     * The module prepends: +QSSLURC: "recv",0,<len>\r\n before each chunk.
-     * We skip everything until we find "HTTP/" which starts the response. */
+    while ((HAL_GetTick() - t) < 180000U) {
+        /* Send read command */
+        AT_RxFlush();
+        AT_Send(recv_cmd);
 
-    /* Skip to "HTTP/" in the ring buffer */
-    {
-        uint32_t st = HAL_GetTick();
-        char skip[6] = {0};
-        while ((HAL_GetTick() - st) < 10000U) {
+        /* Find response prefix (+QSSLRECV: or +QIRD:) */
+        if (!AT_Wait(recv_pfx, 5000U)) {
+            empty_count++;
+            if (empty_count > 30) break;
+            HAL_Delay(200);
+            continue;
+        }
+
+        /* Parse length: read digits after prefix until \n */
+        uint16_t chunk_len = 0;
+        {
+            char nb[8] = {0}; uint8_t ni = 0;
+            uint32_t nt = HAL_GetTick();
+            while ((HAL_GetTick()-nt) < 2000U && ni < 7) {
+                if (at_tail != at_head) {
+                    char c = (char)at_ring[at_tail];
+                    at_tail = (at_tail+1U) % AT_RX_SIZE;
+                    if (c >= '0' && c <= '9') { nb[ni++] = c; }
+                    else if (ni > 0) break;  /* end of number */
+                } else { HAL_Delay(1); }
+            }
+            chunk_len = (uint16_t)atoi(nb);
+            /* Skip to \n (end of header line) */
+            nt = HAL_GetTick();
+            while ((HAL_GetTick()-nt) < 1000U) {
+                if (at_tail != at_head) {
+                    if (at_ring[at_tail] == '\n') {
+                        at_tail = (at_tail+1U) % AT_RX_SIZE;
+                        break;
+                    }
+                    at_tail = (at_tail+1U) % AT_RX_SIZE;
+                } else { HAL_Delay(1); }
+            }
+        }
+
+        if (chunk_len == 0) {
+            /* Wait for trailing OK, then retry */
+            AT_Wait("OK", 2000U);
+            empty_count++;
+            if (got_length && written >= content_length) break;
+            if (empty_count > 30) break;
+            HAL_Delay(300);
+            continue;
+        }
+        empty_count = 0;
+
+        /* Read exactly chunk_len DATA bytes (clean, no URCs) */
+        uint16_t got = 0;
+        uint32_t rt = HAL_GetTick();
+        while (got < chunk_len && (HAL_GetTick()-rt) < 10000U) {
             if (at_tail != at_head) {
-                /* Shift window */
-                skip[0]=skip[1]; skip[1]=skip[2]; skip[2]=skip[3]; skip[3]=skip[4];
-                skip[4] = (char)at_ring[at_tail];
-                at_tail = (at_tail + 1U) % AT_RX_SIZE;
-                if (strncmp(skip, "HTTP/", 5) == 0) {
-                    /* Put "HTTP/" into hdr_buf */
-                    memcpy(hdr_buf, "HTTP/", 5);
-                    hi = 5;
-                    break;
-                }
-            } else {
-                HAL_Delay(1);
-            }
-        }
-        if (hi == 0) {
-            Debug_Print("[QEC] No HTTP response found\r\n");
-            AT_Cmd(close_cmd, "OK", 5000U);
-            return GSM_ERR_HTTP_FAIL;
-        }
-    }
-    Debug_Print("[QEC] Found HTTP response\r\n");
+                uint8_t byte = at_ring[at_tail];
+                at_tail = (at_tail+1U) % AT_RX_SIZE;
+                got++;
 
-    /* Now read the rest: headers then body, directly from ring buffer.
-     * In push mode, each TCP segment arrives as:
-     *   +QSSLURC: "recv",0,<len>\r\n<data bytes>
-     * Between segments, ring buffer may be empty briefly.
-     * We must detect and skip these URC lines mid-stream. */
-    t = HAL_GetTick();
-    uint32_t idle_since = HAL_GetTick();
-    uint8_t hdr_end[4] = {0};  /* sliding window for \r\n\r\n */
-    while ((HAL_GetTick() - t) < 120000U) {
-        if (at_tail != at_head) {
-            uint8_t byte = at_ring[at_tail];
-            at_tail = (at_tail + 1U) % AT_RX_SIZE;
-            idle_since = HAL_GetTick();
-
-
-            if (!in_body) {
-                /* Store in buffer (for parsing), track total count separately */
-                if (hi < sizeof(hdr_buf) - 1) hdr_buf[hi] = (char)byte;
-                hi++;
-                /* Sliding window \r\n\r\n detection (works even if hdr_buf full) */
-                hdr_end[0]=hdr_end[1]; hdr_end[1]=hdr_end[2]; hdr_end[2]=hdr_end[3];
-                hdr_end[3] = byte;
-                if (hi >= 4 && hdr_end[0]=='\r' && hdr_end[1]=='\n'
-                            && hdr_end[2]=='\r' && hdr_end[3]=='\n') {
-                    /* Skip any URC line that starts the body push segment.
-                     * Wait for data, then skip if it starts with \r/\n/+ (URC prefix) */
-                    {
-                        uint32_t wt = HAL_GetTick();
-                        while (at_tail == at_head && (HAL_GetTick() - wt) < 5000U)
-                            HAL_Delay(1);
-                        /* Peek first byte */
-                        if (at_tail != at_head) {
-                            uint8_t peek = at_ring[at_tail];
-                            if (peek == '\r' || peek == '\n' || peek == '+') {
-                                /* Skip URC line until \n */
-                                wt = HAL_GetTick();
-                                while ((HAL_GetTick() - wt) < 3000U) {
-                                    if (at_tail != at_head) {
-                                        uint8_t sb = at_ring[at_tail];
-                                        at_tail = (at_tail+1U) % AT_RX_SIZE;
-                                        if (sb == '\n') break;
-                                    } else { HAL_Delay(1); }
-                                }
-                            }
-                        }
+                if (!in_body) {
+                    if (hi < sizeof(hdr_buf)-1) hdr_buf[hi] = (char)byte;
+                    hi++;
+                    hdr_end[0]=hdr_end[1]; hdr_end[1]=hdr_end[2];
+                    hdr_end[2]=hdr_end[3]; hdr_end[3]=byte;
+                    if (hi>=4 && hdr_end[0]=='\r' && hdr_end[1]=='\n'
+                              && hdr_end[2]=='\r' && hdr_end[3]=='\n') {
+                        in_body = true;
+                        hdr_buf[(hi<512)?hi:511] = '\0';
+                        char *cl=strstr(hdr_buf,"Content-Length:");
+                        if(!cl) cl=strstr(hdr_buf,"content-length:");
+                        if(cl){content_length=(uint32_t)atol(cl+15); got_length=true;}
+                        int status=0;
+                        char *hs=strstr(hdr_buf,"HTTP/");
+                        if(hs){char*sp=strchr(hs,' '); if(sp)status=atoi(sp+1);}
+                        Debug_Printf("[QEC] HTTP %d len=%lu\r\n",status,content_length);
+                        if(status==301||status==302){
+                            char*loc=strstr(hdr_buf,"Location:");
+                            if(!loc)loc=strstr(hdr_buf,"location:");
+                            if(loc){loc+=9;while(*loc==' ')loc++;
+                                char*end=strstr(loc,"\r\n");if(end)*end='\0';
+                                Debug_Printf("[QEC]→%.80s\r\n",loc);
+                                strncpy(redir_url,loc,sizeof(redir_url)-1);
+                                AT_Cmd(close_cmd,"OK",5000U);
+                                cur_url=redir_url;redirects++;goto redirect_retry;}
+                            AT_Cmd(close_cmd,"OK",5000U);return GSM_ERR_HTTP_FAIL;}
+                        if(status!=200&&status!=206){
+                            Debug_Printf("[QEC] Bad %d\r\n",status);
+                            AT_Cmd(close_cmd,"OK",5000U);return GSM_ERR_HTTP_FAIL;}
                     }
-                    in_body = true;
-                    uint16_t cap = (hi-1 < sizeof(hdr_buf)-1) ? hi-1 : sizeof(hdr_buf)-1;
-                    hdr_buf[cap] = '\0';
-                    Debug_Printf("[QEC] Hdrs %u bytes\r\n", hi);
-                    /* Parse Content-Length */
-                    char *cl = strstr(hdr_buf, "Content-Length:");
-                    if (!cl) cl = strstr(hdr_buf, "content-length:");
-                    if (cl) { content_length = (uint32_t)atol(cl + 15); got_length = true; }
-                    /* Parse status */
-                    int status = 0;
-                    char *http_s = strstr(hdr_buf, "HTTP/");
-                    if (http_s) { char *sp = strchr(http_s, ' '); if (sp) status = atoi(sp+1); }
-                    Debug_Printf("[QEC] HTTP %d len=%lu\r\n", status, content_length);
-                    /* Redirect? */
-                    if (status == 301 || status == 302) {
-                        char *loc = strstr(hdr_buf, "Location:");
-                        if (!loc) loc = strstr(hdr_buf, "location:");
-                        if (loc) {
-                            loc += 9; while (*loc == ' ') loc++;
-                            char *end = strstr(loc, "\r\n");
-                            if (end) *end = '\0';
-                            Debug_Printf("[QEC] → %.80s\r\n", loc);
-                            strncpy(redir_url, loc, sizeof(redir_url)-1);
-                            AT_Cmd(close_cmd, "OK", 5000U);
-                            cur_url = redir_url;
-                            redirects++;
-                            goto redirect_retry;
-                        }
-                        AT_Cmd(close_cmd, "OK", 5000U);
-                        return GSM_ERR_HTTP_FAIL;
-                    }
-                    if (status != 200 && status != 206) {
-                        Debug_Printf("[QEC] Bad status %d\r\n", status);
-                        AT_Cmd(close_cmd, "OK", 5000U);
-                        return GSM_ERR_HTTP_FAIL;
-                    }
-                }
-            } else {
-                /* Body byte → page buffer, with URC filtering.
-                 * URC lines start with one or more \r\n then +Q.
-                 * Hold all \r\n bytes; flush only when confirmed not URC. */
-                static uint8_t hold_buf[8];
-                static uint8_t hold_n;
-                if (written == 0 && pi == 0) hold_n = 0;
-
-                if (byte == '\r' || byte == '\n') {
-                    /* Hold \r and \n — might be URC prefix */
-                    if (hold_n < sizeof(hold_buf)) hold_buf[hold_n++] = byte;
-                } else if (byte == '+' && hold_n >= 2) {
-                    /* \r\n...+  — check if URC by peeking for 'Q' */
-                    uint32_t pk = HAL_GetTick();
-                    while (at_tail == at_head && (HAL_GetTick()-pk) < 500U) HAL_Delay(1);
-                    if (at_tail != at_head && at_ring[at_tail] == 'Q') {
-                        /* Confirmed URC — discard held \r\n's, skip line */
-                        uint32_t sk = HAL_GetTick();
-                        while ((HAL_GetTick() - sk) < 3000U) {
-                            if (at_tail != at_head) {
-                                uint8_t sb = at_ring[at_tail];
-                                at_tail = (at_tail + 1U) % AT_RX_SIZE;
-                                if (sb == '\n') break;
-                            } else { HAL_Delay(1); }
-                        }
-                        hold_n = 0;
-                        continue;
-                    }
-                    /* Not URC — flush held + current byte */
-                    for (uint8_t i = 0; i < hold_n; i++)
-                        if (!got_length || written+pi < content_length) page[pi++] = hold_buf[i];
-                    hold_n = 0;
-                    if (!got_length || written+pi < content_length) page[pi++] = byte;
                 } else {
-                    /* Non \r\n and non + after hold: flush held + write byte */
-                    for (uint8_t i = 0; i < hold_n; i++)
-                        if (!got_length || written+pi < content_length) page[pi++] = hold_buf[i];
-                    hold_n = 0;
-                    if (!got_length || written+pi < content_length) page[pi++] = byte;
-                }
-
-                if (pi >= 256U || (got_length && written + pi >= content_length)) {
-                    uint16_t to_write = pi;
-                    if (got_length && written + to_write > content_length)
-                        to_write = (uint16_t)(content_length - written);
-                    if (to_write > 0) {
-                        W25Q_Write(flash_addr + written, page, to_write);
-                        written += to_write;
+                    page[pi++] = byte;
+                    if (pi >= 256U) {
+                        W25Q_Write(flash_addr+written, page, pi);
+                        written += pi; pi = 0;
+                        if (progress_cb && (written%8192U)<256U)
+                            progress_cb(written, content_length);
                     }
-                    pi = 0;
-                    if (progress_cb && (written % 8192U) < 256U)
-                        progress_cb(written, content_length);
-                    if (got_length && written >= content_length) break;
                 }
-            }
-        } else {
-            /* If idle too long, connection closed */
-            if ((HAL_GetTick() - idle_since) > 15000U) {
-                Debug_Printf("[QEC] Idle timeout hi=%u wr=%lu\r\n", hi, written);
-                break;
-            }
-            HAL_Delay(1);
+            } else { HAL_Delay(1); }
         }
+
+        /* Consume trailing \r\nOK\r\n */
+        AT_Wait("OK", 3000U);
+        t = HAL_GetTick();
 
         if (got_length && written >= content_length) break;
     }
 
-    /* Flush partial page */
-    if (pi > 0) {
-        W25Q_Write(flash_addr + written, page, pi);
-        written += pi;
-    }
+    /* Flush */
+    if (pi > 0) { W25Q_Write(flash_addr+written,page,pi); written+=pi; }
 
     AT_Cmd(close_cmd, "OK", 5000U);
     *out_written = written;
-    if (progress_cb) progress_cb(written, got_length ? content_length : written);
-    Debug_Printf("[QEC] Done: %lu/%lu bytes\r\n", written, content_length);
-    return (got_length && written >= content_length) ? GSM_OK : GSM_ERR_HTTP_FAIL;
+    if (progress_cb) progress_cb(written, got_length?content_length:written);
+    Debug_Printf("[QEC] Done: %lu/%lu\r\n", written, content_length);
+    return (got_length && written>=content_length) ? GSM_OK : GSM_ERR_HTTP_FAIL;
 }
 
 /* Legacy range — fallback (not used for OTA) */
