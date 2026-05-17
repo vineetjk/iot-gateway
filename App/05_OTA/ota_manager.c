@@ -237,7 +237,22 @@ static OtaResult_t ota_download(const char *fw_url, uint32_t fw_size,
     }
     /* Use actual written size (from Content-Length) for CRC verify */
     uint32_t verify_size = written;
-    Debug_Printf("[OTA] Downloaded %lu bytes, verifying CRC...\r\n", verify_size);
+    Debug_Printf("[OTA] Downloaded %lu bytes, verifying...\r\n", verify_size);
+
+    /* Debug: print first and last 16 bytes from flash */
+    {
+        uint8_t dbg[16];
+        W25Q_Read(SPI_FLASH_SLOT_A_ADDR, dbg, 16);
+        Debug_Printf("[OTA] First16: %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X\r\n",
+            dbg[0],dbg[1],dbg[2],dbg[3],dbg[4],dbg[5],dbg[6],dbg[7],
+            dbg[8],dbg[9],dbg[10],dbg[11],dbg[12],dbg[13],dbg[14],dbg[15]);
+        if (verify_size > 16) {
+            W25Q_Read(SPI_FLASH_SLOT_A_ADDR + verify_size - 16, dbg, 16);
+            Debug_Printf("[OTA] Last16:  %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X\r\n",
+                dbg[0],dbg[1],dbg[2],dbg[3],dbg[4],dbg[5],dbg[6],dbg[7],
+                dbg[8],dbg[9],dbg[10],dbg[11],dbg[12],dbg[13],dbg[14],dbg[15]);
+        }
+    }
 
     /* CRC verify by reading back from flash */
     uint32_t crc_run = 0xFFFFFFFFUL;
