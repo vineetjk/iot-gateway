@@ -30,5 +30,8 @@ GsmSmStatus_t GSM_SM_Process(void);          /* call every main loop tick   */
 bool          GSM_SM_IsConnected(void);
 GsmSmStatus_t GSM_SM_GetStatus(void);
 void          GSM_SM_SetDisconnected(void);  /* call when publish fails     */
+void          GSM_SM_Pause(void);            /* pause SM (BLE config mode)  */
+void          GSM_SM_Resume(void);           /* resume SM after BLE done    */
+bool          GSM_SM_IsPaused(void);
 
 #endif /* GSM_SM_H */

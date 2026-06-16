@@ -57,6 +57,7 @@ static uint32_t  s_net_start  = 0;   /* tick when LTE reg sequence started  */
 static bool      s_cmd_sent   = false;
 static bool      s_pdp_retry  = false;
 static uint8_t   s_sim_retries = 0;  /* SIM not-ready retry counter */
+static bool      s_paused     = false; /* BLE config mode pause flag */
 
 /* Transition to a new state (resets cmd_sent and state tick) */
 static void go(SmState_t ns)
@@ -99,10 +100,30 @@ void GSM_SM_SetDisconnected(void)
     }
 }
 
+void GSM_SM_Pause(void)
+{
+    s_paused = true;
+    Debug_Print("[SM] Paused (BLE config mode)\r\n");
+}
+
+void GSM_SM_Resume(void)
+{
+    s_paused = false;
+    Debug_Print("[SM] Resumed — restarting connection\r\n");
+    s_pdp_retry   = false;
+    s_sim_retries = 0;
+    Modem_MqttSetUp(false);
+    go(ST_RESET);
+}
+
+bool GSM_SM_IsPaused(void) { return s_paused; }
+
 /* ── State machine ─────────────────────────────────────────────── */
 
 GsmSmStatus_t GSM_SM_Process(void)
 {
+    if (s_paused) return GSM_SM_IDLE;
+
     const GatewayConfig_t *cfg = Config_Get();
     const ModemOps_t *ops = Modem_GetOps();
     uint32_t now = HAL_GetTick();

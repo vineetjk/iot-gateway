@@ -18,6 +18,7 @@ typedef enum {
     DISP_ALARM,
     DISP_ERROR,
     DISP_UPDATING,
+    DISP_CONFIG,
 } DispMode_t;
 
 /* ── Error codes ─────────────────────────────────────────────────── */
@@ -69,5 +70,9 @@ void Display_ClearError(void);
 
 /* Show "Updating..." screen with progress */
 void Display_ShowUpdating(uint32_t done, uint32_t total);
+
+/* Config mode display — flashing "CONFIG MODE" */
+void Display_ShowConfigMode(void);
+void Display_ExitConfigMode(void);
 
 #endif /* DISPLAY_UI_H */

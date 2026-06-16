@@ -143,6 +143,21 @@ class GatewayTool:
         ttk.Button(cmd_frame, text="Send", command=self._send_command).pack(side=tk.LEFT)
         ttk.Button(cmd_frame, text="Clear", command=self._clear_monitor).pack(side=tk.LEFT, padx=5)
 
+        # ── Firmware path ──
+        fw_frame = ttk.Frame(self.root)
+        fw_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        ttk.Label(fw_frame, text="Firmware:").pack(side=tk.LEFT)
+        self.fw_path_var = tk.StringVar()
+        self.fw_entry = tk.Entry(fw_frame, textvariable=self.fw_path_var,
+                                 bg="#2d2d2d", fg="#888888",
+                                 font=("Consolas", 9), insertbackground="#cccccc")
+        self.fw_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        self.fw_entry.insert(0, "C:/Users/prith/STM32CubeIDE/workspace_1.6.0/GATEWAY/Debug/GATEWAY.bin")
+        self.fw_entry.configure(fg="#cccccc")
+
+        ttk.Button(fw_frame, text="Browse", command=self._browse_firmware).pack(side=tk.LEFT)
+
         # ── Bottom: Action buttons ──
         action_frame = ttk.Frame(self.root)
         action_frame.pack(fill=tk.X, padx=10, pady=10)
@@ -275,12 +290,18 @@ class GatewayTool:
     def _reboot(self):
         self._quick_cmd("reboot")
 
-    def _flash_firmware(self):
+    def _browse_firmware(self):
         filepath = filedialog.askopenfilename(
             title="Select Firmware Binary",
             filetypes=[("Binary files", "*.bin"), ("All files", "*.*")]
         )
-        if not filepath:
+        if filepath:
+            self.fw_path_var.set(filepath)
+
+    def _flash_firmware(self):
+        filepath = self.fw_path_var.get().strip()
+        if not filepath or not os.path.isfile(filepath):
+            messagebox.showerror("Error", "Select a valid firmware .bin file")
             return
         if not self.ser or not self.ser.is_open:
             messagebox.showwarning("Warning", "Connect to serial port first")

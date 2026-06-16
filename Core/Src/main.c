@@ -32,6 +32,7 @@
 #include "ota_manager.h"
 #include "telemetry.h"
 #include "bootloader.h"
+#include "ble_config.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -272,6 +273,9 @@ int main(void)
     Modbus_Init(&huart3, GPIO_PIN_4, GPIOA);
     Display_BootMsg("MB", true);
 
+    /* ── 5b. BLE config button (PA0) ── */
+    BLE_Config_InitButton();
+
     /* ── 6. GSM — kick non-blocking state machine ── */
     Debug_Print("[APP] Starting GSM state machine...\r\n");
     Modem_Init(&huart2, GPIOB, GPIO_PIN_4);
@@ -293,6 +297,7 @@ int main(void)
 
     static bool startup_published  = false;
     static bool ota_boot_confirmed = false;
+    static bool config_mode        = false;
 
     /* ── Main loop ── */
     uint32_t last_poll    = 0;
@@ -307,6 +312,38 @@ int main(void)
         uint32_t now = HAL_GetTick();
 
         CLI_Process();   /* non-blocking, always first */
+
+        /* ── BLE Config Mode ── */
+        if (config_mode) {
+            BLE_Config_Process();
+            if (BLE_Config_IsDone()) {
+                config_mode = false;
+                startup_published = false;  /* re-publish after reconnect */
+                GSM_SM_Resume();
+            }
+
+            /* Display + heartbeat still run in config mode */
+            static uint32_t disp_tick_cfg = 0;
+            if ((now - disp_tick_cfg) >= 50) {
+                disp_tick_cfg = now;
+                Display_Update(now);
+            }
+            static uint32_t led_tick_cfg = 0;
+            if ((now - led_tick_cfg) >= 500) {
+                led_tick_cfg = now;
+                HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+            }
+            HAL_Delay(5);
+            continue;  /* skip normal operation */
+        }
+
+        /* ── Check config button (3s hold) — EC200U only (has BLE) ── */
+        if (cfg->modem_type == MODEM_QUECTEL_EC200U && BLE_Config_ButtonHeld()) {
+            config_mode = true;
+            GSM_SM_Pause();
+            BLE_Config_Enter();
+            continue;
+        }
 
         /* ── GSM state machine (non-blocking) ── */
         Modem_MqttCheckURC();  /* async disconnect detection (modem-specific) */

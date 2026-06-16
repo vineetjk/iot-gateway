@@ -428,6 +428,54 @@ void Display_ShowUpdating(uint32_t done, uint32_t total)
     SSD1306_UpdateScreen();
 }
 
+/* ── Config Mode ────────────────────────────────────────────────── */
+static uint32_t s_cfg_flash_t = 0;
+static uint8_t  s_cfg_flash   = 0;
+
+void Display_ShowConfigMode(void)
+{
+    s_mode = DISP_CONFIG;
+    s_cfg_flash = 0;
+    s_cfg_flash_t = HAL_GetTick();
+
+    /* Draw immediately */
+    SSD1306_Clear();
+    SSD1306_FillRect(0, 0, 128, 32, White);
+    SSD1306_WriteStringAt(22, 12, "CONFIG MODE", Font_6x8, Black);
+    SSD1306_UpdateScreen();
+}
+
+void Display_ExitConfigMode(void)
+{
+    if (s_mode == DISP_CONFIG) {
+        s_mode = DISP_NORMAL;
+        s_rotate_t = HAL_GetTick();
+    }
+}
+
+static void render_config(uint32_t now)
+{
+    if ((now - s_cfg_flash_t) >= 500U) {
+        s_cfg_flash_t = now;
+        s_cfg_flash = !s_cfg_flash;
+    }
+
+    SSD1306_Clear();
+
+    if (s_cfg_flash) {
+        /* Full white background with "CONFIG MODE" centered */
+        SSD1306_FillRect(0, 0, 128, 32, White);
+        SSD1306_WriteStringAt(22, 12, "CONFIG MODE", Font_6x8, Black);
+    } else {
+        /* Black screen with white border and text */
+        SSD1306_DrawRect(0, 0, 128, 32, White);
+        SSD1306_DrawRect(1, 1, 126, 30, White);
+        SSD1306_WriteStringAt(22, 12, "CONFIG MODE", Font_6x8, White);
+    }
+
+    SSD1306_UpdateScreen();
+}
+
 /* ── Main Update (call every loop iteration) ──────────────────── */
 void Display_Update(uint32_t now)
 {
@@ -446,6 +494,9 @@ void Display_Update(uint32_t now)
             break;
         case DISP_UPDATING:
             /* Updating screen is driven by Display_ShowUpdating calls */
+            break;
+        case DISP_CONFIG:
+            render_config(now);
             break;
     }
 }
